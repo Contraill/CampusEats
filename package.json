@@ -1,0 +1,15 @@
+{
+  "name": "campuseats-local",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-local Smart QR-Based Restaurant Ordering System with React, Node.js, SQLite, QR and WebSocket.",
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

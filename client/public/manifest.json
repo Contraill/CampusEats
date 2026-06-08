@@ -1,0 +1,17 @@
+{
+  "name": "CampusEats Local",
+  "short_name": "CampusEats",
+  "description": "Full-local campus restaurant QR ordering system",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eefcff",
+  "theme_color": "#08b9aa",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
