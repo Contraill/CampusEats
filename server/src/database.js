@@ -214,6 +214,38 @@ export function seedIfEmpty() {
   }
 }
 
+export function getActiveOrdersForTable(tableId) {
+  return db.prepare(`
+    SELECT id, public_id, order_number, status, payment_status, total_price, created_at, updated_at
+    FROM orders
+    WHERE table_id = ? AND status NOT IN ('COMPLETED', 'CANCELLED')
+    ORDER BY id DESC
+  `).all(tableId);
+}
+
+export function tableBillingStarted(tableId) {
+  const row = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM orders
+    WHERE table_id = ?
+      AND status NOT IN ('COMPLETED', 'CANCELLED')
+      AND (payment_status <> 'NOT_REQUESTED' OR status IN ('PAYMENT_WAITING', 'PAYMENT_REJECTED'))
+  `).get(tableId);
+  return Number(row?.count || 0) > 0;
+}
+
+export function setTableCurrentOrderToLatestActive(tableId) {
+  const latest = db.prepare(`
+    SELECT id
+    FROM orders
+    WHERE table_id = ? AND status NOT IN ('COMPLETED', 'CANCELLED')
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(tableId);
+  db.prepare('UPDATE dining_tables SET current_order_id = ? WHERE id = ?').run(latest?.id || null, tableId);
+  return latest?.id || null;
+}
+
 export function getFullOrder(orderId) {
   const order = db.prepare(`
     SELECT o.*, r.name AS restaurant_name, r.slug AS restaurant_slug, t.table_number, t.table_token
@@ -234,7 +266,9 @@ export function getFullOrder(orderId) {
     SELECT * FROM payments WHERE order_id = ?
   `).get(orderId) || null;
 
-  return { ...order, items, payment };
+  const tableOrders = getActiveOrdersForTable(order.table_id);
+
+  return { ...order, items, payment, table_orders: tableOrders };
 }
 
 export function initDb() {

@@ -171,10 +171,21 @@ function Dashboard({ dashboard, orders, t }) {
 }
 
 function Orders({ orders, run, t }) {
+  const hasOrders = orders.length > 0;
+  const hasWaitingPayments = orders.some((entry) => entry.full?.payment_status === 'WAITING_APPROVAL');
   return (
     <section className="card">
       <h2>{t('liveOrders')}</h2>
       <p className="muted">{t('liveOrdersHelp')}</p>
+      {hasOrders && (
+        <div className="bulkActions">
+          <b>{t('bulkOrderActions')}</b>
+          <button className="smallBtn" onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { status: 'PREPARING' } }), t('bulkUpdated'))}>{t('markAllPreparing')}</button>
+          <button className="smallBtn" onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { status: 'READY' } }), t('bulkUpdated'))}>{t('markAllReady')}</button>
+          <button className="smallBtn" onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { status: 'SERVED' } }), t('bulkUpdated'))}>{t('markAllServed')}</button>
+          <button className="approveBtn" disabled={!hasWaitingPayments} onClick={() => run(() => api('/api/manager/orders/bulk/payment/approve', { method: 'POST' }), t('bulkPaymentsApproved'))}>{t('approveAllPayments')}</button>
+        </div>
+      )}
       <div className="orderGrid">
         {orders.length === 0 && <p className="muted">{t('noOrdersYet')}</p>}
         {orders.map((entry) => (

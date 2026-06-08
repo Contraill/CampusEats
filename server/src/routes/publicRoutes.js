@@ -1,7 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
-import { db, getFullOrder, now, randomToken } from '../database.js';
-import { validate } from '../validation.js';
+import { db, getActiveOrdersForTable, getFullOrder, now, randomToken, setTableCurrentOrderToLatestActive, tableBillingStarted } from '../database.js';
+import { validate, localizedError } from '../validation.js';
 
 const router = express.Router();
 const TAX_RATE = 0.10;
@@ -123,8 +123,9 @@ router.get('/restaurants/:slug/tables/:token/bootstrap', (req, res) => {
   if (!table.is_active) return res.status(403).json({ message: 'This table is not active.' });
 
   const restaurant = { id: table.restaurant_id, name: table.restaurant_name, slug: table.slug, address: table.address, phone: table.phone };
-  const active_order = table.current_order_id ? getFullOrder(table.current_order_id) : null;
-  res.json({ restaurant, table, active_order, menu: publicMenu(table.restaurant_id), tax_rate: TAX_RATE });
+  const activeOrders = getActiveOrdersForTable(table.table_id);
+  const active_order = activeOrders.length ? getFullOrder(activeOrders[0].id) : null;
+  res.json({ restaurant, table, active_order, active_orders: activeOrders, billing_started: tableBillingStarted(table.table_id), menu: publicMenu(table.restaurant_id), tax_rate: TAX_RATE });
 });
 
 router.get('/restaurants/:slug/menu', (req, res) => {
@@ -148,26 +149,17 @@ router.post('/orders', validate(z.object({
     if (!table) return res.status(404).json({ message: 'QR code is not valid.' });
     if (!table.is_active) return res.status(403).json({ message: 'This table is not active.' });
 
-    const activeOrder = table.current_order_id ? getFullOrder(table.current_order_id) : null;
-    const { normalizedItems, total } = normalizeOrderItems(table.restaurant_id, req.body.items);
-    const createdAt = now();
-
-    if (activeOrder && !['COMPLETED', 'CANCELLED'].includes(activeOrder.status)) {
-      if (!req.body.append_to_active) return res.status(409).json({ message: 'This table already has an active order.', active_order: activeOrder });
-      if (activeOrder.payment_status !== 'NOT_REQUESTED') return res.status(409).json({ message: 'This order is already in payment process.', active_order: activeOrder });
-
-      db.transaction(() => {
-        insertOrderItems(activeOrder.id, normalizedItems);
-        db.prepare('UPDATE orders SET total_price = ROUND(total_price + ?, 2), updated_at = ? WHERE id = ?')
-          .run(Number(total.toFixed(2)), createdAt, activeOrder.id);
-      })();
-
-      const full = getFullOrder(activeOrder.id);
-      req.app.get('io')?.to(`restaurant:${table.restaurant_id}`).emit('orders:changed', { order: full });
-      req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
-      return res.status(200).json({ order: full, appended: true });
+    const activeOrders = getActiveOrdersForTable(table.table_id);
+    if (activeOrders.length && tableBillingStarted(table.table_id)) {
+      return res.status(409).json({
+        message: 'Payment process has started for this table. New orders cannot be added until the table is cleared.',
+        active_order: getFullOrder(activeOrders[0].id),
+        active_orders: activeOrders
+      });
     }
 
+    const { normalizedItems, total } = normalizeOrderItems(table.restaurant_id, req.body.items);
+    const createdAt = now();
     const publicId = randomToken(12);
     const createOrder = db.transaction(() => {
       const info = db.prepare(`
@@ -187,7 +179,7 @@ router.post('/orders', validate(z.object({
     const full = getFullOrder(orderId);
     req.app.get('io')?.to(`restaurant:${table.restaurant_id}`).emit('orders:changed', { order: full });
     req.app.get('io')?.to(`restaurant:${table.restaurant_id}`).emit('tables:changed', { table_id: table.table_id });
-    res.status(201).json({ order: full });
+    res.status(201).json({ order: full, order_sequence: activeOrders.length + 1, appended: false });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     next(error);
@@ -200,36 +192,105 @@ router.get('/orders/:publicId', (req, res) => {
   res.json({ order: getFullOrder(order.id) });
 });
 
+
+router.post('/orders/:publicId/cancel', (req, res, next) => {
+  const order = db.prepare('SELECT * FROM orders WHERE public_id = ?').get(req.params.publicId);
+  if (!order) return res.status(404).json({ message: 'Order not found.' });
+  if (['COMPLETED', 'CANCELLED'].includes(order.status) || order.payment_status === 'APPROVED') {
+    return next(localizedError(req, 'This order is already closed.', 409));
+  }
+  if (!['PENDING', 'PREPARING'].includes(order.status)) {
+    return next(localizedError(req, 'Prepared orders cannot be cancelled by the customer.', 409));
+  }
+
+  const paymentAlreadyWaiting = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM orders
+    WHERE restaurant_id = ? AND table_id = ? AND status NOT IN ('COMPLETED', 'CANCELLED')
+      AND (payment_status = 'WAITING_APPROVAL' OR status = 'PAYMENT_WAITING')
+  `).get(order.restaurant_id, order.table_id);
+
+  if (Number(paymentAlreadyWaiting?.count || 0) > 0) {
+    return next(localizedError(req, 'Payment process has started for this table. Orders cannot be cancelled now.', 409));
+  }
+
+  const cancelledAt = now();
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE orders
+      SET status = 'CANCELLED', updated_at = ?, completed_at = COALESCE(completed_at, ?)
+      WHERE id = ? AND status NOT IN ('COMPLETED', 'CANCELLED')
+    `).run(cancelledAt, cancelledAt, order.id);
+    setTableCurrentOrderToLatestActive(order.table_id);
+  })();
+
+  const cancelledOrder = getFullOrder(order.id);
+  const activeOrders = getActiveOrdersForTable(order.table_id);
+  req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('orders:changed', { order: cancelledOrder });
+  req.app.get('io')?.to(`order:${cancelledOrder.public_id}`).emit('order:updated', cancelledOrder);
+  for (const active of activeOrders) {
+    const full = getFullOrder(active.id);
+    req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+  }
+  req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('tables:changed', { table_id: order.table_id });
+  res.json({ order: cancelledOrder, active_orders: activeOrders, table_cleared: activeOrders.length === 0 });
+});
+
 router.post('/orders/:publicId/payment-request', validate(z.object({
   payment_method: z.enum(['CASH', 'CARD', 'TRANSFER']).default('CASH')
 })), (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE public_id = ?').get(req.params.publicId);
   if (!order) return res.status(404).json({ message: 'Order not found.' });
   if (['COMPLETED', 'CANCELLED'].includes(order.status)) return res.status(409).json({ message: 'This order is already closed.' });
-  if (order.status !== 'SERVED' && order.status !== 'PAYMENT_REJECTED') return res.status(409).json({ message: 'Payment can be requested after the order is served.' });
 
-  const fullBefore = getFullOrder(order.id);
-  const templateData = JSON.stringify({
-    title: 'Payment Confirmation', restaurant: fullBefore.restaurant_name, table: fullBefore.table_number,
-    orderNumber: fullBefore.order_number, totalAmount: fullBefore.total_price, method: req.body.payment_method, status: 'Waiting for Approval'
-  });
+  const activeOrders = db.prepare(`
+    SELECT *
+    FROM orders
+    WHERE restaurant_id = ? AND table_id = ? AND status NOT IN ('COMPLETED', 'CANCELLED')
+    ORDER BY id ASC
+  `).all(order.restaurant_id, order.table_id);
 
-  const createdAt = now();
-  const existingPayment = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(order.id);
-  if (existingPayment) {
-    db.prepare(`UPDATE payments SET payment_method = ?, amount = ?, status = 'WAITING_APPROVAL', template_data = ?, rejection_reason = NULL WHERE order_id = ?`)
-      .run(req.body.payment_method, order.total_price, templateData, order.id);
-  } else {
-    db.prepare(`INSERT INTO payments (order_id, payment_method, amount, status, template_data, created_at) VALUES (?, ?, ?, 'WAITING_APPROVAL', ?, ?)`)
-      .run(order.id, req.body.payment_method, order.total_price, templateData, createdAt);
+  if (!activeOrders.length) return res.status(409).json({ message: 'There is no active order for this table.' });
+  const notReadyForPayment = activeOrders.find((active) => !['SERVED', 'PAYMENT_REJECTED'].includes(active.status));
+  if (notReadyForPayment) {
+    return res.status(409).json({ message: 'All active orders must be served before payment can be requested.' });
   }
 
-  db.prepare(`UPDATE orders SET status = 'PAYMENT_WAITING', payment_status = 'WAITING_APPROVAL', updated_at = ? WHERE id = ?`).run(createdAt, order.id);
+  const createdAt = now();
+  const updatedOrders = [];
+  db.transaction(() => {
+    for (const active of activeOrders) {
+      const fullBefore = getFullOrder(active.id);
+      const templateData = JSON.stringify({
+        title: 'Payment Confirmation', restaurant: fullBefore.restaurant_name, table: fullBefore.table_number,
+        orderNumber: fullBefore.order_number, totalAmount: fullBefore.total_price, method: req.body.payment_method, status: 'Waiting for Approval'
+      });
 
-  const full = getFullOrder(order.id);
-  req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('orders:changed', { order: full });
-  req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
-  res.json({ order: full });
+      const existingPayment = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(active.id);
+      if (existingPayment) {
+        db.prepare(`UPDATE payments SET payment_method = ?, amount = ?, status = 'WAITING_APPROVAL', template_data = ?, rejection_reason = NULL WHERE order_id = ?`)
+          .run(req.body.payment_method, active.total_price, templateData, active.id);
+      } else {
+        db.prepare(`INSERT INTO payments (order_id, payment_method, amount, status, template_data, created_at) VALUES (?, ?, ?, 'WAITING_APPROVAL', ?, ?)`)
+          .run(active.id, req.body.payment_method, active.total_price, templateData, createdAt);
+      }
+
+      db.prepare(`UPDATE orders SET status = 'PAYMENT_WAITING', payment_status = 'WAITING_APPROVAL', updated_at = ? WHERE id = ?`)
+        .run(createdAt, active.id);
+      updatedOrders.push(active.id);
+    }
+    setTableCurrentOrderToLatestActive(order.table_id);
+  })();
+
+  let currentFull = null;
+  for (const orderId of updatedOrders) {
+    const full = getFullOrder(orderId);
+    if (orderId === order.id) currentFull = full;
+    req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('orders:changed', { order: full });
+    req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+  }
+  req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('tables:changed', { table_id: order.table_id });
+  res.json({ order: currentFull || getFullOrder(order.id), affected_orders: updatedOrders.length });
 });
 
 router.post('/restaurants/:slug/service-requests', validate(z.object({

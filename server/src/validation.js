@@ -33,7 +33,11 @@ const messageMap = {
     'Payment waiting can only be started by the customer after payment.': 'Ödeme bekleme durumu sadece müşteri ödeme isteği oluşturduktan sonra başlatılabilir.',
     'An order can be completed only after payment approval.': 'Sipariş sadece ödeme onaylandıktan sonra tamamlanabilir.',
     'Payment must be requested by the customer before approval.': 'Ödeme onayından önce müşteri ödeme isteği oluşturmalı.',
-    'This order does not have a waiting payment request.': 'Bu sipariş için onay bekleyen ödeme isteği yok.'
+    'This order does not have a waiting payment request.': 'Bu sipariş için onay bekleyen ödeme isteği yok.',
+    'This order is already closed.': 'Bu sipariş zaten kapalı.',
+    'Payment process has started for this table. Orders cannot be cancelled now.': 'Bu masa için ödeme süreci başladı. Artık sipariş iptal edilemez.',
+    'Prepared orders cannot be cancelled by the customer.': 'Hazır olan sipariş müşteri tarafından iptal edilemez.',
+    'Order cancelled.': 'Sipariş iptal edildi.'
   },
   en: {
     'Invalid email address.': 'Invalid email address.',
@@ -47,7 +51,11 @@ const messageMap = {
     'Payment waiting can only be started by the customer after payment.': 'Payment waiting can only be started by the customer after payment.',
     'An order can be completed only after payment approval.': 'An order can be completed only after payment approval.',
     'Payment must be requested by the customer before approval.': 'Payment must be requested by the customer before approval.',
-    'This order does not have a waiting payment request.': 'This order does not have a waiting payment request.'
+    'This order does not have a waiting payment request.': 'This order does not have a waiting payment request.',
+    'This order is already closed.': 'This order is already closed.',
+    'Payment process has started for this table. Orders cannot be cancelled now.': 'Payment process has started for this table. Orders cannot be cancelled now.',
+    'Prepared orders cannot be cancelled by the customer.': 'Prepared orders cannot be cancelled by the customer.',
+    'Order cancelled.': 'Order cancelled.'
   }
 };
 

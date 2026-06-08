@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Bell, Check, Minus, Plus, QrCode, Search, ShoppingCart, Store } from 'lucide-react';
-import { api, money } from '../api.js';
+import { api, money, niceStatus } from '../api.js';
 import { SettingsControls, useSettings } from '../i18n.jsx';
 
 function cartKey(slug, token) {
@@ -91,13 +91,13 @@ export default function CustomerApp() {
     setLoadingOrder(true);
     setError('');
     try {
-      const payload = { restaurant_slug: slug, table_token: token, append_to_active: Boolean(data?.active_order), items: cart.map((line) => ({ menu_item_id: line.id, quantity: line.quantity, note: line.note })) };
+      const payload = { restaurant_slug: slug, table_token: token, items: cart.map((line) => ({ menu_item_id: line.id, quantity: line.quantity, note: line.note })) };
       const result = await api('/api/public/orders', { method: 'POST', body: payload });
       localStorage.removeItem(cartKey(slug, token));
       setCart([]);
       navigate(`/order/${result.order.public_id}`);
     } catch (err) {
-      if (err.status === 409 && err.data?.active_order) navigate(`/order/${err.data.active_order.public_id}`);
+      if (err.status === 409 && err.data?.active_order && !String(err.message || '').includes('Payment process')) navigate(`/order/${err.data.active_order.public_id}`);
       else setError(err.message);
     } finally {
       setLoadingOrder(false);
@@ -131,7 +131,7 @@ export default function CustomerApp() {
       <section className="phoneFrame menuScreen">
         <div className="customerPrefsFloating"><SettingsControls compact floating /></div>
         <header className="customerTop">
-          <div><span className="small muted">{data.restaurant.name}</span><h1>{t('table')} {data.table.table_number}</h1>{data.active_order && <p className="small noticeInline">{t('addMoreItems')}: {data.active_order.order_number}</p>}</div>
+          <div><span className="small muted">{data.restaurant.name}</span><h1>{t('table')} {data.table.table_number}</h1>{data.active_order && <p className="small noticeInline">{t('newSeparateOrder')}: {t('activeOrders')} {data.active_orders?.length || 1}</p>}</div>
           <div className="customerLogo smallLogo"><Store size={18} /></div>
         </header>
 
@@ -139,6 +139,14 @@ export default function CustomerApp() {
           <input placeholder={t('supportMessage')} value={supportMessage} onChange={(e) => setSupportMessage(e.target.value)} />
           <button className="smallBtn" onClick={callWaiter}><Bell size={15} /> {t('callWaiter')}</button>
         </div>
+
+        {addMode && data.active_orders?.length > 0 && (
+          <div className="tableOrdersMini">
+            <b>{t('tableOrders')}</b>
+            {data.active_orders.map((active) => <span key={active.id}>{active.order_number} · {niceStatus(active.status)}</span>)}
+            <small>{t('newSeparateOrderHelp')}</small>
+          </div>
+        )}
 
         <div className="searchBox"><Search size={16} /><input placeholder={t('searchMenu')} value={search} onChange={(e) => setSearch(e.target.value)} /></div>
         <div className="categoryTabs"><button className={activeCategory === 'all' ? 'active' : ''} onClick={() => setActiveCategory('all')}>{t('all')}</button>{data.menu.categories.map((category) => <button key={category.id} className={activeCategory === String(category.id) ? 'active' : ''} onClick={() => setActiveCategory(String(category.id))}>{category.name}</button>)}</div>

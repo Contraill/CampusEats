@@ -492,6 +492,15 @@ html[data-theme='dark'] .noticeBox {
   background: rgba(6, 116, 255, .12);
   border-color: rgba(6, 116, 255, .3);
 }
+html[data-theme='dark'] .tableOrdersMini,
+html[data-theme='dark'] .bulkActions {
+  background: rgba(15, 26, 39, .78);
+  border-color: var(--line);
+}
+html[data-theme='dark'] .tableOrdersMini span,
+html[data-theme='dark'] .tableOrdersMini a {
+  background: var(--panel);
+}
 html[data-theme='dark'] .paymentTemplate {
   border-color: #34546a;
 }
@@ -548,4 +557,95 @@ html[data-theme='dark'] .customerLogo {
 @media (max-width: 720px) {
   .categoryAdminHead { display: grid; }
   .statusActions .dangerBtn { margin-left: 0; }
+}
+
+.tableOrdersMini {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  margin: 10px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255,255,255,.64);
+}
+
+.tableOrdersMini b {
+  color: var(--text);
+}
+
+.tableOrdersMini span,
+.tableOrdersMini a {
+  display: block;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.tableOrdersMini small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.statusOrdersMini {
+  margin-top: 12px;
+}
+
+.bulkActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255,255,255,.64);
+}
+
+.bulkActions b {
+  margin-right: 4px;
+  color: var(--text);
+}
+
+.tableOrderRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.tableOrderRow a {
+  min-width: 0;
+}
+
+.dangerTiny {
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: white;
+  background: var(--red);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+html[data-theme='dark'] .dangerTiny {
+  color: white;
+}
+
+@media (max-width: 420px) {
+  .tableOrderRow {
+    grid-template-columns: 1fr;
+  }
+  .dangerTiny {
+    justify-self: start;
+  }
 }
