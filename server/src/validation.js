@@ -37,7 +37,9 @@ const messageMap = {
     'This order is already closed.': 'Bu sipariş zaten kapalı.',
     'Payment process has started for this table. Orders cannot be cancelled now.': 'Bu masa için ödeme süreci başladı. Artık sipariş iptal edilemez.',
     'Prepared orders cannot be cancelled by the customer.': 'Hazır olan sipariş müşteri tarafından iptal edilemez.',
-    'Order cancelled.': 'Sipariş iptal edildi.'
+    'Order cancelled.': 'Sipariş iptal edildi.',
+    'A category with this name already exists.': 'Bu isimde bir kategori zaten var.',
+    'A category with this sort order already exists.': 'Bu sıralama numarasına sahip bir kategori zaten var.'
   },
   en: {
     'Invalid email address.': 'Invalid email address.',
@@ -55,7 +57,9 @@ const messageMap = {
     'This order is already closed.': 'This order is already closed.',
     'Payment process has started for this table. Orders cannot be cancelled now.': 'Payment process has started for this table. Orders cannot be cancelled now.',
     'Prepared orders cannot be cancelled by the customer.': 'Prepared orders cannot be cancelled by the customer.',
-    'Order cancelled.': 'Order cancelled.'
+    'Order cancelled.': 'Order cancelled.',
+    'A category with this name already exists.': 'A category with this name already exists.',
+    'A category with this sort order already exists.': 'A category with this sort order already exists.'
   }
 };
 

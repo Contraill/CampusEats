@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
-import { BarChart3, Bell, CheckCircle2, ClipboardList, ImagePlus, Pencil, Plus, QrCode, RefreshCcw, Trash2, UtensilsCrossed, XCircle } from 'lucide-react';
+import { BarChart3, Bell, CheckCircle2, ClipboardList, Clock3, ImagePlus, Pencil, Plus, QrCode, RefreshCcw, Trash2, UtensilsCrossed, XCircle } from 'lucide-react';
 import { api, getStoredUser, money, niceStatus, updateStoredUser } from '../api.js';
 import { useSettings } from '../i18n.jsx';
 import AppShell from './AppShell.jsx';
@@ -29,10 +29,20 @@ function validateTableForm(form, t) {
   return errors;
 }
 
-function validateCategoryForm(form, t) {
+function normalizeCategoryName(value) {
+  return String(value || '').trim().toLocaleLowerCase('tr-TR');
+}
+
+function validateCategoryForm(form, t, categories = [], currentId = null) {
   const errors = {};
-  if (!String(form.name || '').trim()) errors.name = t('requiredField');
-  else if (String(form.name).trim().length < 2) errors.name = t('shortName');
+  const name = String(form.name || '').trim();
+  const sortOrder = Number(form.sort_order);
+  if (!name) errors.name = t('requiredField');
+  else if (name.length < 2) errors.name = t('shortName');
+  else if (categories.some((category) => category.id !== currentId && normalizeCategoryName(category.name) === normalizeCategoryName(name))) errors.name = t('categoryNameAlreadyExists');
+
+  if (!Number.isInteger(sortOrder)) errors.sort_order = t('invalidSortOrder');
+  else if (categories.some((category) => category.id !== currentId && Number(category.sort_order) === sortOrder)) errors.sort_order = t('categorySortOrderAlreadyExists');
   return errors;
 }
 
@@ -55,13 +65,14 @@ export default function ManagerPanel() {
   const [tables, setTables] = useState([]);
   const [menu, setMenu] = useState({ categories: [], items: [] });
   const [orders, setOrders] = useState([]);
+  const [orderHistory, setOrderHistory] = useState([]);
   const [requests, setRequests] = useState([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
   async function loadAll() {
-    const [dashboardData, tableData, menuData, orderData, supportData] = await Promise.all([
-      api('/api/manager/dashboard'), api('/api/manager/tables'), api('/api/manager/menu'), api('/api/manager/orders'), api('/api/manager/service-requests')
+    const [dashboardData, tableData, menuData, orderData, historyData, supportData] = await Promise.all([
+      api('/api/manager/dashboard'), api('/api/manager/tables'), api('/api/manager/menu'), api('/api/manager/orders'), api('/api/manager/orders?scope=history'), api('/api/manager/service-requests')
     ]);
     setDashboard(dashboardData);
     setRestaurant(dashboardData.restaurant);
@@ -71,6 +82,7 @@ export default function ManagerPanel() {
     setTables(tableData.tables);
     setMenu(menuData);
     setOrders(orderData.orders);
+    setOrderHistory(historyData.orders);
     setRequests(supportData.requests);
   }
 
@@ -107,21 +119,29 @@ export default function ManagerPanel() {
   }
 
   return (
-    <AppShell title={t('managerDashboard')} subtitle={t('managerSubtitle')} restaurantName={restaurant?.name}>
-      <div className="tabbar">
-        <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><BarChart3 size={16} /> {t('dashboard')}</button>
-        <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}><ClipboardList size={16} /> {t('orders')}</button>
-        <button className={tab === 'tables' ? 'active' : ''} onClick={() => setTab('tables')}><QrCode size={16} /> {t('tablesQr')}</button>
-        <button className={tab === 'menu' ? 'active' : ''} onClick={() => setTab('menu')}><UtensilsCrossed size={16} /> {t('menu')}</button>
-        <button className={tab === 'support' ? 'active' : ''} onClick={() => setTab('support')}><Bell size={16} /> {t('support')} {requests.filter((r) => r.status === 'OPEN').length ? `(${requests.filter((r) => r.status === 'OPEN').length})` : ''}</button>
-        <button className="refresh" onClick={() => run(loadAll)}><RefreshCcw size={16} /> {t('refresh')}</button>
+    <AppShell
+      title={t('managerDashboard')}
+      subtitle={t('managerSubtitle')}
+      restaurantName={restaurant?.name}
+      headerAction={<button className="refreshBtn managerRefreshBtn" onClick={() => run(loadAll)}><RefreshCcw size={16} /> <span>{t('refresh')}</span></button>}
+    >
+      <div className="managerNavRow">
+        <div className="tabbar managerTabs">
+          <button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><BarChart3 size={16} /> <span>{t('dashboard')}</span></button>
+          <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}><ClipboardList size={16} /> <span>{t('orders')}</span></button>
+          <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}><Clock3 size={16} /> <span>{t('pastOrderHistory')}</span></button>
+          <button className={tab === 'tables' ? 'active' : ''} onClick={() => setTab('tables')}><QrCode size={16} /> <span>{t('tablesQr')}</span></button>
+          <button className={tab === 'menu' ? 'active' : ''} onClick={() => setTab('menu')}><UtensilsCrossed size={16} /> <span>{t('menu')}</span></button>
+          <button className={tab === 'support' ? 'active' : ''} onClick={() => setTab('support')}><Bell size={16} /> <span>{t('support')} {requests.filter((r) => r.status === 'OPEN').length ? `(${requests.filter((r) => r.status === 'OPEN').length})` : ''}</span></button>
+        </div>
       </div>
 
       {message && <div className="successBox">{message}</div>}
       {error && <div className="errorBox">{error}</div>}
 
-      {tab === 'dashboard' && <Dashboard dashboard={dashboard} orders={orders} t={t} />}
+      {tab === 'dashboard' && <Dashboard dashboard={dashboard} orders={orders} run={run} t={t} />}
       {tab === 'orders' && <Orders orders={orders} run={run} t={t} />}
+      {tab === 'history' && <OrderHistory orderHistory={orderHistory} t={t} />}
       {tab === 'tables' && <Tables tables={tables} run={run} t={t} />}
       {tab === 'menu' && <Menu menu={menu} run={run} t={t} />}
       {tab === 'support' && <Support requests={requests} run={run} t={t} />}
@@ -129,7 +149,7 @@ export default function ManagerPanel() {
   );
 }
 
-function Dashboard({ dashboard, orders, t }) {
+function Dashboard({ dashboard, orders, run, t }) {
   if (!dashboard) return <div className="card">{t('loadingDashboard')}</div>;
   const cards = [
     [t('todayRevenue'), money(dashboard.today.revenue), t('approvedPaymentsToday')],
@@ -137,12 +157,47 @@ function Dashboard({ dashboard, orders, t }) {
     [t('activeOrders'), dashboard.totals.active_orders || 0, t('pendingPreparingReady')],
     [t('waitingPayments'), dashboard.totals.waiting_payments || 0, t('needsApproval')]
   ];
+  const periodCards = [
+    [t('last7Days'), money(dashboard.week?.revenue), `${dashboard.week?.orders || 0} ${t('ordersLower')} · ${dashboard.week?.completed_orders || 0} ${t('completedLower')} · ${dashboard.week?.cancelled_orders || 0} ${t('cancelledLower')}`],
+    [t('last30Days'), money(dashboard.month?.revenue), `${dashboard.month?.orders || 0} ${t('ordersLower')} · ${dashboard.month?.completed_orders || 0} ${t('completedLower')} · ${dashboard.month?.cancelled_orders || 0} ${t('cancelledLower')}`],
+    [t('weeklyAverageTicket'), money(dashboard.week?.average_ticket), t('approvedPaymentAverage')],
+    [t('monthlyAverageTicket'), money(dashboard.month?.average_ticket), t('approvedPaymentAverage')]
+  ];
+
+  function clearHistory() {
+    if (!confirm(t('clearHistoryConfirmOne'))) return;
+    if (!confirm(t('clearHistoryConfirmTwo'))) return;
+    run(() => api('/api/manager/orders/history', { method: 'DELETE' }), t('historyCleared'));
+  }
+
+  function SellerList({ title, items, emptyText }) {
+    return (
+      <section className="card">
+        <h2>{title}</h2>
+        <div className="miniList">
+          {(!items || items.length === 0) && <p className="muted">{emptyText}</p>}
+          {(items || []).map((item) => <div key={item.name}><span>{item.name}</span><b>{item.quantity} {t('sold')}</b></div>)}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="stack gap">
       <div className="statsGrid">
         {cards.map(([label, value, help]) => <div className="statCard" key={label}><span>{label}</span><strong>{value}</strong><small>{help}</small></div>)}
       </div>
+      <section className="card">
+        <div className="sectionHeader noAction">
+          <div>
+            <h2>{t('managementStats')}</h2>
+            <p className="muted">{t('managementStatsHelp')}</p>
+          </div>
+        </div>
+        <div className="statsGrid compactStats">
+          {periodCards.map(([label, value, help]) => <div className="statCard" key={label}><span>{label}</span><strong>{value}</strong><small>{help}</small></div>)}
+        </div>
+      </section>
       <div className="grid two">
         <section className="card">
           <h2>{t('dailyRevenue')}</h2>
@@ -154,52 +209,108 @@ function Dashboard({ dashboard, orders, t }) {
             })}
           </div>
         </section>
-        <section className="card">
-          <h2>{t('bestSellers')}</h2>
-          <div className="miniList">
-            {dashboard.bestSellers.length === 0 && <p className="muted">{t('noOrderItems')}</p>}
-            {dashboard.bestSellers.map((item) => <div key={item.name}><span>{item.name}</span><b>{item.quantity} {t('sold')}</b></div>)}
-          </div>
-        </section>
+        <SellerList title={t('bestSellers')} items={dashboard.bestSellers} emptyText={t('noOrderItems')} />
+      </div>
+      <div className="grid two">
+        <SellerList title={t('weeklyBestSellers')} items={dashboard.weeklyBestSellers} emptyText={t('noWeeklyBestSellers')} />
+        <SellerList title={t('monthlyBestSellers')} items={dashboard.monthlyBestSellers} emptyText={t('noMonthlyBestSellers')} />
       </div>
       <section className="card">
         <h2>{t('latestOrders')}</h2>
         <div className="orderPreviewGrid">{orders.slice(0, 6).map((entry) => <OrderCard key={entry.id} order={entry.full} compact t={t} />)}</div>
+      </section>
+      <section className="card dangerZone">
+        <div>
+          <h2>{t('dangerZone')}</h2>
+          <p className="muted">{t('clearOrderHistoryHelp')}</p>
+        </div>
+        <button className="dangerBtn" onClick={clearHistory}><Trash2 size={15} /> {t('clearOrderHistory')}</button>
       </section>
     </div>
   );
 }
 
 function Orders({ orders, run, t }) {
-  const hasOrders = orders.length > 0;
-  const hasWaitingPayments = orders.some((entry) => entry.full?.payment_status === 'WAITING_APPROVAL');
+  const groupedTables = useMemo(() => {
+    const result = new Map();
+    for (const entry of orders) {
+      const tableNumber = entry.table_number || entry.full?.table_number || '-';
+      const tableId = entry.table_id || entry.full?.table_id;
+      const key = String(tableId || tableNumber);
+      if (!result.has(key)) result.set(key, { tableId, tableNumber, entries: [] });
+      result.get(key).entries.push(entry);
+    }
+    return Array.from(result.values());
+  }, [orders]);
+
+  function TableBulkActions({ group }) {
+    const hasActionable = group.entries.some((entry) => entry.full?.payment_status === 'NOT_REQUESTED' && !['COMPLETED', 'CANCELLED', 'PAYMENT_WAITING'].includes(entry.full?.status));
+    const hasWaitingPayments = group.entries.some((entry) => entry.full?.payment_status === 'WAITING_APPROVAL' && entry.full?.status === 'PAYMENT_WAITING');
+    return (
+      <div className="bulkActions tableBulkActions">
+        <b>{t('table')} {group.tableNumber} · {t('bulkOrderActions')}</b>
+        <button className="smallBtn" disabled={!hasActionable} onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { table_id: group.tableId, status: 'PREPARING' } }), t('bulkUpdated'))}>{t('markAllPreparing')}</button>
+        <button className="smallBtn" disabled={!hasActionable} onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { table_id: group.tableId, status: 'READY' } }), t('bulkUpdated'))}>{t('markAllReady')}</button>
+        <button className="smallBtn" disabled={!hasActionable} onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { table_id: group.tableId, status: 'SERVED' } }), t('bulkUpdated'))}>{t('markAllServed')}</button>
+        <button className="approveBtn" disabled={!hasWaitingPayments} onClick={() => run(() => api('/api/manager/orders/bulk/payment/approve', { method: 'POST', body: { table_id: group.tableId } }), t('bulkPaymentsApproved'))}>{t('approveAllPayments')}</button>
+      </div>
+    );
+  }
+
   return (
     <section className="card">
-      <h2>{t('liveOrders')}</h2>
-      <p className="muted">{t('liveOrdersHelp')}</p>
-      {hasOrders && (
-        <div className="bulkActions">
-          <b>{t('bulkOrderActions')}</b>
-          <button className="smallBtn" onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { status: 'PREPARING' } }), t('bulkUpdated'))}>{t('markAllPreparing')}</button>
-          <button className="smallBtn" onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { status: 'READY' } }), t('bulkUpdated'))}>{t('markAllReady')}</button>
-          <button className="smallBtn" onClick={() => run(() => api('/api/manager/orders/bulk/status', { method: 'POST', body: { status: 'SERVED' } }), t('bulkUpdated'))}>{t('markAllServed')}</button>
-          <button className="approveBtn" disabled={!hasWaitingPayments} onClick={() => run(() => api('/api/manager/orders/bulk/payment/approve', { method: 'POST' }), t('bulkPaymentsApproved'))}>{t('approveAllPayments')}</button>
-        </div>
-      )}
-      <div className="orderGrid">
-        {orders.length === 0 && <p className="muted">{t('noOrdersYet')}</p>}
-        {orders.map((entry) => (
-          <OrderCard
-            key={entry.id}
-            order={entry.full}
-            t={t}
-            onStatus={(status) => run(() => api(`/api/manager/orders/${entry.id}/status`, { method: 'PATCH', body: { status } }), t('orderStatusUpdated'))}
-            onApprove={() => run(() => api(`/api/manager/orders/${entry.id}/payment/approve`, { method: 'POST' }), t('paymentApproved'))}
-            onReject={() => {
-              const reason = prompt(t('rejectReason'), t('rejectReasonDefault'));
-              if (reason) run(() => api(`/api/manager/orders/${entry.id}/payment/reject`, { method: 'POST', body: { reason } }), t('paymentRejectedShort'));
-            }}
-          />
+      <h2>{t('todayOrdersPanel')}</h2>
+      <p className="muted">{t('todayOrdersHelp')}</p>
+      {orders.length === 0 && <p className="muted">{t('noTodayOrders')}</p>}
+      <div className="tableOrderGroups">
+        {groupedTables.map((group) => (
+          <div className="tableOrderGroup" key={group.tableId || group.tableNumber}>
+            <div className="tableOrderGroupHead"><h3>{t('table')} {group.tableNumber}</h3><span>{group.entries.length} {t('ordersLower')}</span></div>
+            <TableBulkActions group={group} />
+            <div className="orderGrid">
+              {group.entries.map((entry) => (
+                <OrderCard
+                  key={entry.id}
+                  order={entry.full}
+                  t={t}
+                  onStatus={(status) => run(() => api(`/api/manager/orders/${entry.id}/status`, { method: 'PATCH', body: { status } }), t('orderStatusUpdated'))}
+                  onApprove={() => run(() => api(`/api/manager/orders/${entry.id}/payment/approve`, { method: 'POST' }), t('paymentApproved'))}
+                  onReject={() => {
+                    const reason = prompt(t('rejectReason'), t('rejectReasonDefault'));
+                    if (reason) run(() => api(`/api/manager/orders/${entry.id}/payment/reject`, { method: 'POST', body: { reason } }), t('paymentRejectedShort'));
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OrderHistory({ orderHistory, t }) {
+  const groupedHistory = useMemo(() => {
+    const result = new Map();
+    for (const entry of orderHistory) {
+      const date = String(entry.created_at || entry.full?.created_at || '').slice(0, 10) || t('unknownDate');
+      if (!result.has(date)) result.set(date, []);
+      result.get(date).push(entry);
+    }
+    return Array.from(result.entries());
+  }, [orderHistory, t]);
+
+  return (
+    <section className="card">
+      <h2>{t('pastOrderHistory')}</h2>
+      <p className="muted">{t('pastOrderHistoryHelp')}</p>
+      {groupedHistory.length === 0 && <p className="muted">{t('noPastOrders')}</p>}
+      <div className="historyStack">
+        {groupedHistory.map(([date, entries]) => (
+          <div className="historyDay" key={date}>
+            <h3>{date}</h3>
+            <div className="orderPreviewGrid">{entries.map((entry) => <OrderCard key={entry.id} order={entry.full} compact t={t} />)}</div>
+          </div>
         ))}
       </div>
     </section>
@@ -210,6 +321,9 @@ function OrderCard({ order, compact = false, onStatus, onApprove, onReject, t })
   if (!order) return null;
   const paymentTemplate = order.payment?.template_data ? JSON.parse(order.payment.template_data) : null;
   const closed = ['COMPLETED', 'CANCELLED'].includes(order.status);
+  const paymentLocked = order.payment_status !== 'NOT_REQUESTED' || ['PAYMENT_WAITING', 'PAYMENT_REJECTED', 'PAYMENT_APPROVED'].includes(order.status);
+  const canChangeKitchenStatus = !closed && !paymentLocked;
+  const canCancel = !closed && !paymentLocked;
 
   return (
     <article className="orderCard">
@@ -222,8 +336,8 @@ function OrderCard({ order, compact = false, onStatus, onApprove, onReject, t })
       {!compact && (
         <>
           <div className="orderActions statusActions">
-            {['PREPARING', 'READY', 'SERVED'].map((status) => <button key={status} className="smallBtn" onClick={() => onStatus?.(status)} disabled={closed}>{niceStatus(status)}</button>)}
-            <button className="dangerBtn" onClick={() => onStatus?.('CANCELLED')} disabled={closed}>{niceStatus('CANCELLED')}</button>
+            {['PREPARING', 'READY', 'SERVED'].map((status) => <button key={status} className="smallBtn" onClick={() => onStatus?.(status)} disabled={!canChangeKitchenStatus}>{niceStatus(status)}</button>)}
+            <button className="dangerBtn" onClick={() => onStatus?.('CANCELLED')} disabled={!canCancel}>{niceStatus('CANCELLED')}</button>
           </div>
           {paymentTemplate && (
             <div className="paymentTemplate">
@@ -244,7 +358,7 @@ function OrderCard({ order, compact = false, onStatus, onApprove, onReject, t })
 }
 
 function Tables({ tables, run, t }) {
-  const [form, setForm] = useState({ table_number: '', capacity: 4 });
+  const [form, setForm] = useState({ table_number: '', capacity: '' });
   const [errors, setErrors] = useState({});
   const [editing, setEditing] = useState(null);
   const [editErrors, setEditErrors] = useState({});
@@ -257,7 +371,7 @@ function Tables({ tables, run, t }) {
     if (Object.keys(local).length) return;
     try {
       await run(() => api('/api/manager/tables', { method: 'POST', body: form }), t('tableCreated'));
-      setForm({ table_number: '', capacity: 4 });
+      setForm({ table_number: '', capacity: '' });
     } catch (err) { setErrors(normalizeApiErrors(err)); }
   }
 
@@ -288,7 +402,7 @@ function Tables({ tables, run, t }) {
         <h2>{t('tablesQr')}</h2>
         <form className="inlineForm" onSubmit={createTable} noValidate>
           <label className="inlineLabel"><span>{t('tableNo')}</span><input value={form.table_number} onChange={(e) => setForm({ ...form, table_number: e.target.value })} /><FieldError message={errors.table_number} /></label>
-          <label className="inlineLabel"><span>{t('seatCapacity')}</span><input inputMode="numeric" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} /><FieldError message={errors.capacity} /></label>
+          <label className="inlineLabel"><span>{t('seatCapacity')}</span><input inputMode="numeric" placeholder={t('seatCapacityPlaceholder')} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} /><FieldError message={errors.capacity} /></label>
           <button className="primaryBtn"><Plus size={16} /> {t('addTable')}</button>
         </form>
         {editing && (
@@ -343,7 +457,7 @@ function Menu({ menu, run, t }) {
 
   async function addCategory(event) {
     event.preventDefault();
-    const local = validateCategoryForm(categoryForm, t);
+    const local = validateCategoryForm(categoryForm, t, menu.categories);
     setCategoryErrors(local);
     if (Object.keys(local).length) return;
     try {
@@ -354,7 +468,7 @@ function Menu({ menu, run, t }) {
 
   async function saveCategory(event) {
     event.preventDefault();
-    const local = validateCategoryForm(editingCategory, t);
+    const local = validateCategoryForm(editingCategory, t, menu.categories, editingCategory.id);
     setEditingCategoryErrors(local);
     if (Object.keys(local).length) return;
     try {
@@ -421,10 +535,10 @@ function Menu({ menu, run, t }) {
         <h2>{t('menuManagement')}</h2>
         <form className="inlineForm" onSubmit={addCategory} noValidate>
           <label className="inlineLabel"><span>{t('categoryName')}</span><input placeholder={t('categoryName')} value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} /><FieldError message={categoryErrors.name} /></label>
-          <label className="inlineLabel"><span>{t('sortOrder')}</span><input inputMode="numeric" value={categoryForm.sort_order} onChange={(e) => setCategoryForm({ ...categoryForm, sort_order: e.target.value })} /></label>
+          <label className="inlineLabel"><span>{t('sortOrder')}</span><input inputMode="numeric" value={categoryForm.sort_order} onChange={(e) => setCategoryForm({ ...categoryForm, sort_order: e.target.value })} /><FieldError message={categoryErrors.sort_order} /></label>
           <button className="primaryBtn"><Plus size={16} /> {t('addCategory')}</button>
         </form>
-        {editingCategory && <form className="editPanel stack" onSubmit={saveCategory} noValidate><h3>{t('editCategory')}</h3><label><span>{t('categoryName')}</span><input value={editingCategory.name} onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })} /><FieldError message={editingCategoryErrors.name} /></label><label><span>{t('sortOrder')}</span><input inputMode="numeric" value={editingCategory.sort_order} onChange={(e) => setEditingCategory({ ...editingCategory, sort_order: e.target.value })} /></label><label className="checkRow"><input type="checkbox" checked={Boolean(editingCategory.is_active)} onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })} /> <span>{t('active')}</span></label><div className="orderActions"><button className="primaryBtn">{t('save')}</button><button type="button" className="smallBtn" onClick={() => setEditingCategory(null)}>{t('cancel')}</button></div></form>}
+        {editingCategory && <form className="editPanel stack" onSubmit={saveCategory} noValidate><h3>{t('editCategory')}</h3><label><span>{t('categoryName')}</span><input value={editingCategory.name} onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })} /><FieldError message={editingCategoryErrors.name} /></label><label><span>{t('sortOrder')}</span><input inputMode="numeric" value={editingCategory.sort_order} onChange={(e) => setEditingCategory({ ...editingCategory, sort_order: e.target.value })} /><FieldError message={editingCategoryErrors.sort_order} /></label><label className="checkRow"><input type="checkbox" checked={Boolean(editingCategory.is_active)} onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })} /> <span>{t('active')}</span></label><div className="orderActions"><button className="primaryBtn">{t('save')}</button><button type="button" className="smallBtn" onClick={() => setEditingCategory(null)}>{t('cancel')}</button></div></form>}
         <div className="menuAdminList">
           {grouped.map((category) => (
             <div key={category.id} className="categoryBlock">

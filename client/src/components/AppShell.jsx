@@ -3,7 +3,7 @@ import { LogOut, QrCode } from 'lucide-react';
 import { clearSession, getStoredUser } from '../api.js';
 import { SettingsControls, useSettings } from '../i18n.jsx';
 
-export default function AppShell({ title, subtitle, restaurantName, children }) {
+export default function AppShell({ title, subtitle, restaurantName, headerAction, children }) {
   const navigate = useNavigate();
   const user = getStoredUser();
   const { t } = useSettings();
@@ -30,11 +30,12 @@ export default function AppShell({ title, subtitle, restaurantName, children }) 
       </aside>
       <section className="panelMain">
         <header className="panelHeader">
-          <div>
+          <div className="panelHeaderText">
             <h1>{title}</h1>
             <p>{subtitle}</p>
             {restaurantName && <p className="restaurantBadge">{t('restaurant')}: <b>{restaurantName}</b></p>}
           </div>
+          {headerAction && <div className="panelHeaderAction">{headerAction}</div>}
         </header>
         {children}
       </section>

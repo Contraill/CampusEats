@@ -7,7 +7,7 @@ import fs from 'fs';
 import { z } from 'zod';
 import { db, getActiveOrdersForTable, getFullOrder, now, randomToken, setTableCurrentOrderToLatestActive, uploadDir } from '../database.js';
 import { authRequired, requireManagerRestaurant, requireRole } from '../auth.js';
-import { validate, localizedError } from '../validation.js';
+import { validate, localizedError, translateMessage } from '../validation.js';
 
 const router = express.Router();
 const TAX_RATE = 0.10;
@@ -63,6 +63,30 @@ async function saveMenuImage(file) {
   }
 }
 
+
+function normalizeCategoryName(value) {
+  return String(value || '').trim().toLocaleLowerCase('tr-TR');
+}
+
+function categoryConflictResponse(req, res, pathName, message) {
+  const translated = translateMessage(message, req);
+  return res.status(409).json({
+    message: translated,
+    errors: [{ path: pathName, message: translated, code: 'custom' }]
+  });
+}
+
+function findCategoryNameConflict(rid, name, excludeId = null) {
+  const target = normalizeCategoryName(name);
+  return db.prepare('SELECT id, name FROM categories WHERE restaurant_id = ?').all(rid)
+    .find((category) => category.id !== excludeId && normalizeCategoryName(category.name) === target);
+}
+
+function findCategorySortConflict(rid, sortOrder, excludeId = null) {
+  return db.prepare('SELECT id FROM categories WHERE restaurant_id = ? AND sort_order = ? AND id <> ?')
+    .get(rid, Number(sortOrder), excludeId ?? 0);
+}
+
 function paymentTemplateFor(order, method = 'TEMPLATE') {
   const full = getFullOrder(order.id);
   return JSON.stringify({
@@ -79,6 +103,8 @@ function paymentTemplateFor(order, method = 'TEMPLATE') {
 router.get('/dashboard', (req, res) => {
   const rid = restaurantId(req);
   const todayPrefix = new Date().toISOString().slice(0, 10);
+  const weekCutoff = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const monthCutoff = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const restaurant = db.prepare('SELECT id, name, slug, address, phone FROM restaurants WHERE id = ?').get(rid);
 
   const totals = db.prepare(`
@@ -100,15 +126,40 @@ router.get('/dashboard', (req, res) => {
     WHERE restaurant_id = ? AND substr(created_at, 1, 10) = ?
   `).get(rid, todayPrefix);
 
+  const periodStatsStmt = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN payment_status = 'APPROVED' THEN total_price ELSE 0 END), 0) AS revenue,
+      COUNT(*) AS orders,
+      SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_orders,
+      SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_orders,
+      ROUND(AVG(CASE WHEN payment_status = 'APPROVED' THEN total_price ELSE NULL END), 2) AS average_ticket
+    FROM orders
+    WHERE restaurant_id = ? AND substr(created_at, 1, 10) >= ?
+  `);
+  const week = periodStatsStmt.get(rid, weekCutoff);
+  const month = periodStatsStmt.get(rid, monthCutoff);
+
+  const bestSellerStmt = db.prepare(`
+    SELECT oi.name_snapshot AS name, SUM(oi.quantity) AS quantity, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    WHERE o.restaurant_id = ? AND o.status <> 'CANCELLED' AND substr(o.created_at, 1, 10) >= ?
+    GROUP BY oi.name_snapshot
+    ORDER BY quantity DESC, revenue DESC
+    LIMIT 5
+  `);
+
   const bestSellers = db.prepare(`
     SELECT oi.name_snapshot AS name, SUM(oi.quantity) AS quantity, ROUND(SUM(oi.quantity * oi.unit_price), 2) AS revenue
     FROM order_items oi
     JOIN orders o ON o.id = oi.order_id
-    WHERE o.restaurant_id = ?
+    WHERE o.restaurant_id = ? AND o.status <> 'CANCELLED'
     GROUP BY oi.name_snapshot
-    ORDER BY quantity DESC
+    ORDER BY quantity DESC, revenue DESC
     LIMIT 5
   `).all(rid);
+  const weeklyBestSellers = bestSellerStmt.all(rid, weekCutoff);
+  const monthlyBestSellers = bestSellerStmt.all(rid, monthCutoff);
 
   const tableStats = db.prepare(`
     SELECT t.table_number, COUNT(o.id) AS order_count, COALESCE(SUM(o.total_price), 0) AS total
@@ -128,7 +179,7 @@ router.get('/dashboard', (req, res) => {
     LIMIT 7
   `).all(rid).reverse();
 
-  res.json({ restaurant, totals, today, bestSellers, tableStats, dailyRevenue });
+  res.json({ restaurant, totals, today, week, month, bestSellers, weeklyBestSellers, monthlyBestSellers, tableStats, dailyRevenue });
 });
 
 router.get('/tables', (req, res) => {
@@ -151,7 +202,7 @@ router.get('/tables', (req, res) => {
 
 router.post('/tables', validate(z.object({
   table_number: z.string().trim().min(1),
-  capacity: z.coerce.number().int().min(1).max(50).default(4)
+  capacity: z.coerce.number().int().min(1).max(50)
 })), (req, res) => {
   const rid = restaurantId(req);
   try {
@@ -277,10 +328,18 @@ router.post('/categories', validate(z.object({
   name: z.string().trim().min(2),
   sort_order: z.coerce.number().int().default(0)
 })), (req, res) => {
+  const rid = restaurantId(req);
+  if (findCategoryNameConflict(rid, req.body.name)) {
+    return categoryConflictResponse(req, res, 'name', 'A category with this name already exists.');
+  }
+  if (findCategorySortConflict(rid, req.body.sort_order)) {
+    return categoryConflictResponse(req, res, 'sort_order', 'A category with this sort order already exists.');
+  }
+
   const info = db.prepare(`
     INSERT INTO categories (restaurant_id, name, sort_order, is_active)
     VALUES (?, ?, ?, 1)
-  `).run(restaurantId(req), req.body.name, req.body.sort_order);
+  `).run(rid, req.body.name, req.body.sort_order);
   const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(info.lastInsertRowid);
   emitRestaurant(req, 'menu:changed', { category });
   res.status(201).json({ category });
@@ -292,8 +351,18 @@ router.patch('/categories/:id', validate(z.object({
   sort_order: z.coerce.number().int().optional(),
   is_active: z.boolean().optional()
 })), (req, res) => {
-  const category = db.prepare('SELECT * FROM categories WHERE id = ? AND restaurant_id = ?').get(Number(req.params.id), restaurantId(req));
+  const rid = restaurantId(req);
+  const category = db.prepare('SELECT * FROM categories WHERE id = ? AND restaurant_id = ?').get(Number(req.params.id), rid);
   if (!category) return res.status(404).json({ message: 'Category not found.' });
+  const nextName = req.body.name ?? category.name;
+  const nextSortOrder = req.body.sort_order ?? category.sort_order;
+  if (findCategoryNameConflict(rid, nextName, category.id)) {
+    return categoryConflictResponse(req, res, 'name', 'A category with this name already exists.');
+  }
+  if (findCategorySortConflict(rid, nextSortOrder, category.id)) {
+    return categoryConflictResponse(req, res, 'sort_order', 'A category with this sort order already exists.');
+  }
+
   db.prepare(`
     UPDATE categories
     SET name = COALESCE(?, name),
@@ -412,57 +481,95 @@ router.delete('/menu-items/:id', (req, res) => {
 
 router.get('/orders', (req, res) => {
   const rid = restaurantId(req);
+  const todayPrefix = new Date().toISOString().slice(0, 10);
+  const scope = String(req.query.scope || 'today');
+  const dateFilter = scope === 'history'
+    ? 'AND substr(o.created_at, 1, 10) < ?'
+    : 'AND substr(o.created_at, 1, 10) = ?';
   const orders = db.prepare(`
     SELECT o.*, t.table_number,
       (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
     FROM orders o
     JOIN dining_tables t ON t.id = o.table_id
     WHERE o.restaurant_id = ?
+      ${dateFilter}
     ORDER BY o.created_at DESC
     LIMIT 100
-  `).all(rid).map((order) => ({ ...order, full: getFullOrder(order.id) }));
+  `).all(rid, todayPrefix).map((order) => ({ ...order, full: getFullOrder(order.id) }));
   res.json({ orders });
+});
+
+router.delete('/orders/history', (req, res) => {
+  const rid = restaurantId(req);
+  const ids = db.prepare(`
+    SELECT id
+    FROM orders
+    WHERE restaurant_id = ?
+      AND status IN ('COMPLETED', 'CANCELLED')
+  `).all(rid).map((row) => row.id);
+
+  if (ids.length) {
+    const deleteOrder = db.prepare('DELETE FROM orders WHERE id = ? AND restaurant_id = ?');
+    db.transaction(() => {
+      for (const id of ids) deleteOrder.run(id, rid);
+    })();
+  }
+
+  emitRestaurant(req, 'orders:changed', { history_cleared: true, deleted_count: ids.length });
+  emitRestaurant(req, 'tables:changed', { history_cleared: true });
+  res.json({ ok: true, deleted_count: ids.length });
 });
 
 
 router.post('/orders/bulk/status', validate(z.object({
+  table_id: z.coerce.number().int().positive(),
   status: z.enum(['PREPARING', 'READY', 'SERVED'])
 })), (req, res) => {
   const rid = restaurantId(req);
+  const table = assertOwnTable(req, req.body.table_id);
+  if (!table) return res.status(404).json({ message: 'Table not found.' });
+
   const updatedAt = now();
   const targets = db.prepare(`
     SELECT id, public_id
     FROM orders
     WHERE restaurant_id = ?
+      AND table_id = ?
       AND status NOT IN ('COMPLETED', 'CANCELLED', 'PAYMENT_WAITING')
       AND payment_status = 'NOT_REQUESTED'
-  `).all(rid);
+  `).all(rid, table.id);
 
   db.prepare(`
     UPDATE orders
     SET status = ?, updated_at = ?
     WHERE restaurant_id = ?
+      AND table_id = ?
       AND status NOT IN ('COMPLETED', 'CANCELLED', 'PAYMENT_WAITING')
       AND payment_status = 'NOT_REQUESTED'
-  `).run(req.body.status, updatedAt, rid);
+  `).run(req.body.status, updatedAt, rid, table.id);
 
   for (const target of targets) {
     const full = getFullOrder(target.id);
     emitRestaurant(req, 'orders:changed', { order: full });
     req.app.get('io')?.to(`order:${target.public_id}`).emit('order:updated', full);
   }
-  emitRestaurant(req, 'tables:changed', { bulk: true });
-  res.json({ ok: true, updated_count: targets.length });
+  emitRestaurant(req, 'tables:changed', { table_id: table.id });
+  res.json({ ok: true, updated_count: targets.length, table_id: table.id });
 });
 
-router.post('/orders/bulk/payment/approve', (req, res, next) => {
+router.post('/orders/bulk/payment/approve', validate(z.object({
+  table_id: z.coerce.number().int().positive()
+})), (req, res, next) => {
   const rid = restaurantId(req);
+  const table = assertOwnTable(req, req.body.table_id);
+  if (!table) return res.status(404).json({ message: 'Table not found.' });
+
   const targets = db.prepare(`
     SELECT o.*
     FROM orders o
     JOIN payments p ON p.order_id = o.id AND p.status = 'WAITING_APPROVAL'
-    WHERE o.restaurant_id = ? AND o.payment_status = 'WAITING_APPROVAL' AND o.status = 'PAYMENT_WAITING'
-  `).all(rid);
+    WHERE o.restaurant_id = ? AND o.table_id = ? AND o.payment_status = 'WAITING_APPROVAL' AND o.status = 'PAYMENT_WAITING'
+  `).all(rid, table.id);
 
   if (!targets.length) return next(localizedError(req, 'There are no waiting payment requests.', 409));
 
@@ -511,6 +618,10 @@ router.patch('/orders/:id/status', validate(z.object({
 
   if (req.body.status === 'COMPLETED' && order.payment_status !== 'APPROVED') {
     return next(localizedError(req, 'An order can be completed only after payment approval.', 409));
+  }
+
+  if (req.body.status === 'CANCELLED' && (order.payment_status !== 'NOT_REQUESTED' || ['PAYMENT_WAITING', 'PAYMENT_REJECTED', 'PAYMENT_APPROVED'].includes(order.status))) {
+    return next(localizedError(req, 'Payment process has started for this order. It cannot be cancelled now.', 409));
   }
 
   const updatedAt = now();

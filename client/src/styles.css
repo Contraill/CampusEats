@@ -76,30 +76,39 @@ label span { display: block; font-size: 13px; color: var(--muted); margin-bottom
 .demoButtons { display: flex; gap: 10px; flex-wrap: wrap; }
 
 .appShell { min-height: 100vh; display: grid; grid-template-columns: 260px 1fr; background: #f4f8fb; }
-.sidebar { min-height: 100vh; padding: 22px; background: #11231f; color: white; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; }
+.sidebar { min-height: 100vh; padding: 22px; background: linear-gradient(180deg, #172033 0%, #1f2d43 100%); color: white; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 0; border-right: 1px solid rgba(31, 45, 67, .14); box-shadow: 10px 0 30px rgba(24, 37, 56, .08); }
 .panelBrand { color: white; }
-.userCard { padding: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); border-radius: 22px; display: grid; gap: 4px; }
+.userCard { padding: 16px; background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.14); border-radius: 22px; display: grid; gap: 4px; }
 .userCard span { color: rgba(255,255,255,.68); font-size: 12px; }
 .sideNav { display: grid; gap: 8px; }
-.sideNav a { padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.07); }
+.sideNav a { padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.075); border: 1px solid rgba(255,255,255,.08); transition: background .16s ease, transform .16s ease; }
+.sideNav a:hover { background: rgba(255,255,255,.12); transform: translateX(2px); }
 .logout { margin-top: auto; background: rgba(255,255,255,.08); color: white; border-color: rgba(255,255,255,.14); }
 .panelMain { padding: 30px; display: grid; gap: 20px; align-content: start; }
-.panelHeader { display: flex; justify-content: space-between; align-items: center; }
+.panelHeader { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
+.panelHeaderText { min-width: 0; }
 .panelHeader h1 { margin: 0; letter-spacing: -.04em; font-size: 36px; }
 .panelHeader p { color: var(--muted); margin: 6px 0 0; }
+.panelHeaderAction { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; align-self: flex-start; padding-top: 4px; }
 .sectionTitle { display: flex; align-items: center; gap: 10px; }
 .sectionTitle h2 { margin: 0 0 8px; }
-.inlineForm { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.inlineForm { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 18px; }
 .inlineForm input, .inlineForm select { flex: 1; min-width: 140px; }
+.inlineForm .primaryBtn { align-self: flex-start; margin-top: 25px; min-height: 40px; height: 40px; padding: 0 14px; flex: 0 0 auto; box-shadow: 0 10px 20px rgba(0, 116, 255, .18); }
 .tableWrap { overflow: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 13px 12px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .07em; }
 
-.tabbar { display: flex; flex-wrap: wrap; gap: 8px; }
-.tabbar button { border: 1px solid var(--line); background: white; padding: 11px 14px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; font-weight: 800; color: #24485c; }
+.managerNavRow { display: block; width: 100%; }
+.tabbar { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; align-items: stretch; width: 100%; min-width: 0; }
+.managerTabs { width: 100%; }
+.tabbar button { border: 1px solid var(--line); background: white; padding: 9px 10px; min-height: 42px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 800; color: #24485c; white-space: normal; line-height: 1.16; min-width: 0; text-align: center; overflow: hidden; }
+.tabbar button span { min-width: 0; overflow-wrap: anywhere; }
+.tabbar button svg { flex: 0 0 auto; }
 .tabbar button.active { background: linear-gradient(135deg, var(--teal), var(--blue)); color: white; border-color: transparent; }
-.tabbar .refresh { margin-left: auto; }
+.refreshBtn { border: 1px solid var(--line); background: white; color: #24485c; min-height: 42px; padding: 0 14px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font-weight: 800; white-space: nowrap; box-shadow: 0 8px 20px rgba(22, 63, 87, 0.07); }
+.managerRefreshBtn { flex: 0 0 auto; min-height: 44px; padding: 0 16px; }
 .statsGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .statCard { background: white; border: 1px solid var(--line); border-radius: 24px; padding: 20px; display: grid; gap: 7px; box-shadow: var(--shadow); }
 .statCard span { color: var(--muted); }
@@ -199,13 +208,18 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
   .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .appShell { grid-template-columns: 1fr; }
   .sidebar { position: relative; min-height: auto; }
-  .tabbar .refresh { margin-left: 0; }
+  .managerNavRow { flex-direction: column; }
+  .managerRefreshBtn { align-self: flex-end; }
+  .tabbar { grid-template-columns: repeat(auto-fit, minmax(138px, 1fr)); }
 }
 
 @media (max-width: 560px) {
   .hero { padding: 38px 18px; }
   .heroActions, .demoButtons { flex-direction: column; }
   .panelMain { padding: 18px; }
+  .managerRefreshBtn { align-self: stretch; }
+  .tabbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tabbar button { padding: 9px 10px; font-size: 13px; }
   .statsGrid { grid-template-columns: 1fr; }
   .tableCard, .adminMenuItem { grid-template-columns: 1fr; }
   .phoneFrame { border-radius: 26px; min-height: calc(100vh - 24px); width: calc(100vw - 20px); }
@@ -268,7 +282,8 @@ html[data-theme='dark'] .hero h1 { color: var(--text); }
 .restaurantBadge { display: inline-flex; gap: 5px; background: rgba(8, 185, 170, .12); border: 1px solid rgba(8, 185, 170, .25); padding: 7px 11px; border-radius: 999px; }
 .editPanel { margin: 0 0 18px; padding: 16px; border: 1px dashed var(--line); border-radius: 18px; }
 .tableActions { display: flex; gap: 8px; flex-wrap: wrap; }
-.inlineLabel { flex: 1; min-width: 160px; }
+.inlineLabel { flex: 1 1 170px; min-width: 150px; }
+.inlineForm .inlineLabel:nth-of-type(2) { flex: 0 1 150px; }
 .inlineLabel span { display: block; margin-bottom: 6px; }
 .status { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; min-width: max-content; line-height: 1.15; text-align: center; }
 .orderHead { align-items: flex-start; }
@@ -291,8 +306,17 @@ html[data-theme='dark'] .hero h1 { color: var(--text); }
 .supportCard p { margin: 0; color: var(--muted); }
 html[data-theme='dark'] .supportCard { background: var(--panel); }
 
+@media (max-width: 1120px) {
+  .tabbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 @media (max-width: 720px) {
   .topnav { flex-wrap: wrap; justify-content: flex-end; }
+  .panelHeader { align-items: flex-start; flex-direction: column; }
+  .panelHeaderAction { align-self: stretch; justify-content: flex-start; padding-top: 0; }
+  .inlineForm .primaryBtn { margin-top: 0; width: auto; }
+  .inlineForm .inlineLabel:nth-of-type(2) { flex: 1 1 150px; }
+  .tabbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settingsControls.compact label { min-width: 76px; }
   .customerUtility { grid-template-columns: 1fr; }
   .supportCard { align-items: flex-start; flex-direction: column; }
@@ -403,6 +427,7 @@ html[data-theme='dark'] .secondaryBtn,
 html[data-theme='dark'] .ghostBtn,
 html[data-theme='dark'] .smallBtn,
 html[data-theme='dark'] .tabbar button,
+html[data-theme='dark'] .refreshBtn,
 html[data-theme='dark'] .categoryTabs button,
 html[data-theme='dark'] .qtyControls button,
 html[data-theme='dark'] .backBtn {
@@ -559,6 +584,24 @@ html[data-theme='dark'] .customerLogo {
   .statusActions .dangerBtn { margin-left: 0; }
 }
 
+
+/* v4.7 manager panel polish */
+html:not([data-theme='dark']) .sidebarSettings .segmentedGroup {
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.16);
+}
+html:not([data-theme='dark']) .sidebarSettings .segmentedGroup button {
+  color: rgba(255,255,255,.72);
+}
+html:not([data-theme='dark']) .sidebarSettings .segmentedGroup button.active {
+  color: white;
+  background: linear-gradient(135deg, #3b82f6, #14b8a6);
+}
+html:not([data-theme='dark']) .logout {
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.16);
+}
+
 .tableOrdersMini {
   display: grid;
   gap: 7px;
@@ -647,5 +690,66 @@ html[data-theme='dark'] .dangerTiny {
   }
   .dangerTiny {
     justify-self: start;
+  }
+}
+
+.tableOrderGroups {
+  display: grid;
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.tableOrderGroup {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 14px;
+  background: rgba(255,255,255,.52);
+}
+
+.tableOrderGroupHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.tableOrderGroupHead h3 {
+  margin: 0;
+}
+
+.tableOrderGroupHead span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tableBulkActions {
+  margin: 10px 0 14px;
+}
+
+.dangerZone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-style: dashed;
+}
+
+.dangerZone h2 {
+  margin-bottom: 6px;
+}
+
+.sectionHeader.noAction {
+  justify-content: flex-start;
+}
+
+html[data-theme='dark'] .tableOrderGroup {
+  background: rgba(15, 23, 42, .35);
+}
+
+@media (max-width: 720px) {
+  .dangerZone {
+    display: grid;
   }
 }
