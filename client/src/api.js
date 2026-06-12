@@ -73,10 +73,14 @@ export function niceStatus(status) {
     PENDING: 'Bekliyor', PREPARING: 'Hazırlanıyor', READY: 'Hazır', SERVED: 'Servis Edildi',
     PAYMENT_WAITING: 'Ödeme Bekliyor', PAYMENT_REJECTED: 'Ödeme Reddedildi', PAYMENT_APPROVED: 'Ödeme Onaylandı',
     COMPLETED: 'Tamamlandı', CANCELLED: 'İptal Edildi', NOT_REQUESTED: 'İstenmedi', WAITING_APPROVAL: 'Onay Bekliyor',
-    APPROVED: 'Onaylandı', REJECTED: 'Reddedildi', OPEN: 'Açık', DONE: 'Tamamlandı', WAITER: 'Garson', QR_HELP: 'QR Destek',
-    CASH: 'Nakit', CARD: 'Kart', TRANSFER: 'Havale', TEMPLATE: 'Template'
+    APPROVED: 'Onaylandı', REJECTED: 'Reddedildi', OPEN: 'Açık', DONE: 'Tamamlandı', WAITER: 'Garson', QR_HELP: 'QR Desteği',
+    CASH: 'Nakit', CARD: 'Kredi Kartı', TRANSFER: 'IBAN / Havale', TEMPLATE: 'Ödeme Şablonu'
   } : {
-    CASH: 'Cash', CARD: 'Card', TRANSFER: 'Transfer', TEMPLATE: 'Template'
+    PENDING: 'Pending', PREPARING: 'Preparing', READY: 'Ready', SERVED: 'Served',
+    PAYMENT_WAITING: 'Payment Pending', PAYMENT_REJECTED: 'Payment Rejected', PAYMENT_APPROVED: 'Payment Approved',
+    COMPLETED: 'Completed', CANCELLED: 'Cancelled', NOT_REQUESTED: 'Not Requested', WAITING_APPROVAL: 'Waiting for Approval',
+    APPROVED: 'Approved', REJECTED: 'Rejected', OPEN: 'Open', DONE: 'Done', WAITER: 'Waiter', QR_HELP: 'QR Support',
+    CASH: 'Cash', CARD: 'Credit Card', TRANSFER: 'IBAN Transfer', TEMPLATE: 'Payment Template'
   };
   return map[raw] || raw.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }

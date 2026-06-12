@@ -15,7 +15,7 @@ Firebase kullanmadan, tamamen lokal çalışan Smart QR-Based Restaurant Orderin
 - Aydınlık / karanlık tema, localStorage ile kalıcı
 - Menü ürün resmi yükleme ve otomatik WebP resize
 - Garson çağırma ve geçersiz QR destek bildirimi
-- Müşteri tarafından sipariş hazır olmadan önce tekil sipariş iptali
+- Müşteri tarafından hazırlık başlamadan önce tekil sipariş iptali
 
 ## Kurulum
 
@@ -56,7 +56,7 @@ Password: manager123!
 5. Müşteri ürünleri sepete ekleyip siparişi oluşturur.
 6. Sipariş manager panelindeki Orders ekranına canlı düşer.
 7. Müşteri **Add more items / Yeni ürün ekle** dediğinde mevcut sipariş bozulmaz; aynı masa için ikinci, üçüncü, dördüncü sipariş ayrı kart olarak açılır.
-8. Müşteri masadaki aktif siparişlerden istediğini sipariş READY/Hazır aşamasına geçmeden önce tek tek iptal edebilir. İptal edilen sipariş ödeme hesabına dahil edilmez.
+8. Müşteri masadaki aktif siparişlerden istediğini yalnızca PENDING/Bekliyor aşamasındayken tek tek iptal edebilir. İptal edilen sipariş ödeme hesabına dahil edilmez.
 9. Müşteri **Call Waiter / Garson Çağır** ile destek bildirimi gönderebilir.
 10. Masadaki iptal edilmemiş tüm aktif siparişler servis edildikten sonra müşteri ödeme isteği oluşturabilir; ödeme template üzerinden onaylanınca aktif masa oturumu temizlenir.
 11. Aynı QR kod yeni müşteri için tekrar kullanılabilir.
@@ -88,8 +88,8 @@ Manager panelinde menü ürünü eklerken veya mevcut ürünün resmini değişt
 - Payment approve/table clear akışı güvenli hale getirildi; eski sipariş yeni masayı temizleyemez.
 - Ek siparişler artık mevcut siparişe eklenmez; her yeni sepet aynı masa için ayrı sipariş kartı oluşturur.
 - Manager, toplu sipariş işlemlerini artık restoran geneline değil, masa bazında uygular. Aynı masadan gelen 2., 3., 4. siparişler birlikte Preparing/Ready/Served yapılabilir ve aynı masanın bekleyen ödemeleri birlikte onaylanabilir.
-- Sipariş READY/Hazır aşamasına geçince ve ödeme süreci başladığında tekil sipariş iptali engellenir; ödeme tamamlandıktan sonra Ana sayfaya dön butonu aynı QR linkine döner ve masa temizse yeni müşteri gibi menüyü açar.
-- Müşteri tarafında tekil sipariş iptali vardır; iptal butonu yalnızca PENDING/Bekliyor ve PREPARING/Hazırlanıyor aşamalarında görünür, READY/Hazır ve sonrasında kapanır. İptal edilen sipariş aktif masa hesabından çıkarılır, kalan siparişler varsa ödeme akışı bu siparişler üzerinden devam eder.
+- Sipariş PREPARING/Hazırlanıyor aşamasına geçince ve ödeme süreci başladığında tekil sipariş iptali engellenir; ödeme tamamlandıktan sonra Ana sayfaya dön butonu aynı QR linkine döner ve masa temizse yeni müşteri gibi menüyü açar.
+- Müşteri tarafında tekil sipariş iptali vardır; iptal butonu yalnızca PENDING/Bekliyor aşamasında görünür, PREPARING/Hazırlanıyor ve sonrasında tamamen kaldırılır. İptal edilen sipariş aktif masa hesabından çıkarılır, kalan siparişler varsa ödeme akışı bu siparişler üzerinden devam eder.
 - Manager menü, kategori ve masa CRUD işlemleri genişletildi.
 - Karanlık tema kapsamı genişletildi; panel, tablo, customer ekranı, sepet ve ödeme ekranlarında hard-coded açık renkler azaltıldı.
 - Tema ve dil butonları select yerine modern segmented kontrol haline getirildi.
@@ -131,6 +131,22 @@ Manager panelinde menü ürünü eklerken veya mevcut ürünün resmini değişt
 - Dar ekranlarda manager sekmeleri iki kolon düzenine geçer, yenile butonu ise tek başına alta/sağa hizalanarak taşma görüntüsü oluşturmaz.
 - Karanlık temada yeni yenile butonu da diğer panel butonlarıyla uyumlu şekilde renklendirildi.
 
+
+## v5.0 ödeme ve sipariş akışı düzeltmeleri
+
+- Sipariş numarası artık database `id` değerine göre değil, restorandaki mevcut sipariş numaralarının en büyüğüne göre oluşturulur. Tüm siparişler silindiğinde yeni sipariş tekrar `#00001` ile başlar.
+- Customer ödeme yöntemi `Card / Kredi kartı` veya `IBAN / Havale` seçilirse ödeme otomatik onaylanır; manager panelinden ayrıca onay gerekmez.
+- Customer `Cash / Nakit` seçerse ödeme manager/kasa onayı bekler.
+- Manager, masadaki tüm aktif siparişler `Servis edildi / Served` olduktan sonra müşteri telefonu tekrar açmasa bile masa bazlı **Ödemeyi Onayla** butonuyla kasadan ödeme onaylayabilir.
+- Ödeme onayı sipariş kartı bazında tek tek değil, masa bazında tek seferde yapılır. `Tüm bekleyen ödemeleri onayla` ifadesi kaldırıldı; buton artık yalnızca **Ödemeyi Onayla** olarak görünür.
+- Ödemesi onaylanan siparişler aktif **Siparişler** sekmesinden çıkar ve doğrudan **Geçmiş siparişler** sekmesine düşer.
+- Sipariş kartlarında tarih ve saat bilgisi görünür.
+- Manager sipariş kartlarında ürün notları görünür.
+- Müşteri tarafında iptal butonu yalnızca sipariş `PENDING / Bekliyor` durumundayken görünür. `PREPARING / Hazırlanıyor` aşamasından itibaren buton tamamen kaldırılır.
+- Dashboard üzerinde son iptal edilen siparişler ayrı listelenir; iptal edilen siparişler tek tek silinebilir.
+- Ödeme tamamlanınca masa aktif oturumu kapanır. Aynı QR linkinden dönüldüğünde sistem yeni müşteri gibi menüyü açar; eski müşteri siparişleri yeni müşterinin toplu masa işlemlerine karışmaz.
+- Customer sipariş takip ekranındaki başlık artık durum değiştikçe değişir: bekliyor, hazırlanıyor, hazır, servis edildi, ödeme bekliyor, tamamlandı veya iptal edildi gibi ayrı başlıklar gösterilir.
+
 ## Production gibi lokal çalıştırma
 
 ```bash
@@ -143,7 +159,7 @@ Bu komut, React build dosyalarını Express üzerinden servis eder.
 ## Notlar
 
 - Sistem lokal SQLite dosyasını `server/data/campuseats.sqlite` altında oluşturur.
-- Firebase kullanılmaz.
+- Harici bulut veritabanı kullanılmaz; demo verileri lokal SQLite veritabanında tutulur.
 - QR kodlar sabittir; ödeme onaylanınca QR değil masanın aktif sipariş/session durumu temizlenir.
 
 ## GitHub için .gitignore notu
@@ -165,3 +181,44 @@ Bu sürümde `.gitignore` dosyası local/demo sırasında oluşan dosyaları rep
 
 - The manager refresh action was moved out of the tab row and into the main panel header, aligned with the **Manager Panel / Yönetici Paneli** title area.
 - Manager tabs now contain only navigation items, preventing tab labels from overflowing or visually competing with the refresh button.
+
+## v5.1 Customer status screen and app icon fixes
+
+- The `Ana sayfaya dön / Back to home` button was removed from active customer order status stages where it does not make sense:
+  - `Sipariş onaylandı / Order confirmed`
+  - `Hazırlanıyor / Preparing`
+  - `Hazırlandı / Ready`
+  - `Teslim edildi / Served`
+  - payment waiting/rejected active states
+- The return button is kept only for closed states such as completed or cancelled orders, where returning to the same fixed QR link can start a fresh table session when the table is already cleared.
+- The browser tab favicon was redesigned to look like a real QR-code style CampusEats icon instead of the previous rectangle/plus-like symbol.
+- PWA icons were updated as PNG assets:
+  - `/icons/icon-192.png`
+  - `/icons/icon-512.png`
+- `manifest.json` now uses the PNG icons for installable PWA behavior, while the SVG icon remains available as a scalable browser favicon.
+- `apple-touch-icon` was added for better iOS home screen appearance.
+
+## v5.2 Icon correction
+
+- The browser tab favicon was replaced with the exact Lucide-style QR Code icon shape used in the application UI.
+- The PWA icons were regenerated from the same QR Code shape so the installed app icon no longer appears as a rectangle/plus-like symbol.
+- Updated icon files:
+  - `client/public/icons/icon.svg`
+  - `client/public/icons/icon-192.png`
+  - `client/public/icons/icon-512.png`
+  - `client/dist/icons/icon.svg`
+  - `client/dist/icons/icon-192.png`
+  - `client/dist/icons/icon-512.png`
+
+### v5.3 Icon Update
+
+- Browser tab favicon and PWA icons were updated to the final CampusEats QR icon style: a blue rounded-square background with the white Lucide QR Code symbol inside.
+- Service worker cache name was bumped so browsers can refresh the new icon assets instead of keeping the old cached icons.
+
+### v5.4 Landing Page and Text Polish
+
+- Turkish and English UI labels were reviewed and polished for clearer, more consistent wording.
+- The landing page no longer presents the architecture as “No Firebase”; it now explains the actual local runtime architecture professionally: React, Node.js/Express, SQLite, WebSocket and PWA support.
+- The root page now includes clearer “How it works” and “Local runtime architecture” explanation cards for jury/demo presentation.
+- The customer demo button now opens the actual first table of the demo restaurant by asking the backend for the current Table 1 QR token, instead of using a placeholder QR link.
+- Payment and order wording was refined across Turkish and English screens, including manager bulk actions, payment approval, order status messages and invalid QR support text.

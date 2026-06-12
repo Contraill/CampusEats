@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { db, getActiveOrdersForTable, getFullOrder, now, randomToken, setTableCurrentOrderToLatestActive, tableBillingStarted } from '../database.js';
+import { db, getActiveOrdersForTable, getFullOrder, nextOrderNumber, now, randomToken, setTableCurrentOrderToLatestActive, tableBillingStarted } from '../database.js';
 import { validate, localizedError } from '../validation.js';
 
 const router = express.Router();
@@ -117,6 +117,22 @@ function createServiceRequest({ app, restaurant, tableToken = '', tableNumber = 
   return { request, duplicated: false };
 }
 
+
+router.get('/demo/table-link', (req, res) => {
+  const table = db.prepare(`
+    SELECT r.slug, t.table_token, t.table_number
+    FROM restaurants r
+    JOIN dining_tables t ON t.restaurant_id = r.id
+    WHERE r.slug = 'campus-eats' AND t.table_number = '1' AND t.is_active = 1
+    ORDER BY t.id
+    LIMIT 1
+  `).get();
+
+  if (!table) return res.status(404).json({ message: 'Demo table was not found.' });
+  const path = `/r/${table.slug}/table/${table.table_token}`;
+  res.json({ path, table_number: table.table_number });
+});
+
 router.get('/restaurants/:slug/tables/:token/bootstrap', (req, res) => {
   const table = getRestaurantAndTable(req.params.slug, req.params.token);
   if (!table) return res.status(404).json({ message: 'QR code is not valid.' });
@@ -162,14 +178,13 @@ router.post('/orders', validate(z.object({
     const createdAt = now();
     const publicId = randomToken(12);
     const createOrder = db.transaction(() => {
+      const orderNumber = nextOrderNumber(table.restaurant_id);
       const info = db.prepare(`
         INSERT INTO orders (public_id, restaurant_id, table_id, order_number, status, total_price, payment_status, created_at, updated_at)
-        VALUES (?, ?, ?, 'TEMP', 'PENDING', ?, 'NOT_REQUESTED', ?, ?)
-      `).run(publicId, table.restaurant_id, table.table_id, Number(total.toFixed(2)), createdAt, createdAt);
+        VALUES (?, ?, ?, ?, 'PENDING', ?, 'NOT_REQUESTED', ?, ?)
+      `).run(publicId, table.restaurant_id, table.table_id, orderNumber, Number(total.toFixed(2)), createdAt, createdAt);
 
       const orderId = Number(info.lastInsertRowid);
-      const orderNumber = `#${String(orderId).padStart(5, '0')}`;
-      db.prepare('UPDATE orders SET order_number = ? WHERE id = ?').run(orderNumber, orderId);
       insertOrderItems(orderId, normalizedItems);
       db.prepare('UPDATE dining_tables SET current_order_id = ? WHERE id = ?').run(orderId, table.table_id);
       return orderId;
@@ -199,8 +214,8 @@ router.post('/orders/:publicId/cancel', (req, res, next) => {
   if (['COMPLETED', 'CANCELLED'].includes(order.status) || order.payment_status === 'APPROVED') {
     return next(localizedError(req, 'This order is already closed.', 409));
   }
-  if (!['PENDING', 'PREPARING'].includes(order.status)) {
-    return next(localizedError(req, 'Prepared orders cannot be cancelled by the customer.', 409));
+  if (order.status !== 'PENDING') {
+    return next(localizedError(req, 'Orders can only be cancelled before preparation starts.', 409));
   }
 
   const paymentAlreadyWaiting = db.prepare(`
@@ -258,25 +273,32 @@ router.post('/orders/:publicId/payment-request', validate(z.object({
 
   const createdAt = now();
   const updatedOrders = [];
+  const autoApproved = ['CARD', 'TRANSFER'].includes(req.body.payment_method);
   db.transaction(() => {
     for (const active of activeOrders) {
       const fullBefore = getFullOrder(active.id);
       const templateData = JSON.stringify({
         title: 'Payment Confirmation', restaurant: fullBefore.restaurant_name, table: fullBefore.table_number,
-        orderNumber: fullBefore.order_number, totalAmount: fullBefore.total_price, method: req.body.payment_method, status: 'Waiting for Approval'
+        orderNumber: fullBefore.order_number, totalAmount: fullBefore.total_price, method: req.body.payment_method,
+        status: autoApproved ? 'Approved Automatically' : 'Waiting for Approval'
       });
 
       const existingPayment = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(active.id);
       if (existingPayment) {
-        db.prepare(`UPDATE payments SET payment_method = ?, amount = ?, status = 'WAITING_APPROVAL', template_data = ?, rejection_reason = NULL WHERE order_id = ?`)
-          .run(req.body.payment_method, active.total_price, templateData, active.id);
+        db.prepare(`UPDATE payments SET payment_method = ?, amount = ?, status = ?, template_data = ?, approved_at = ?, rejection_reason = NULL WHERE order_id = ?`)
+          .run(req.body.payment_method, active.total_price, autoApproved ? 'APPROVED' : 'WAITING_APPROVAL', templateData, autoApproved ? createdAt : null, active.id);
       } else {
-        db.prepare(`INSERT INTO payments (order_id, payment_method, amount, status, template_data, created_at) VALUES (?, ?, ?, 'WAITING_APPROVAL', ?, ?)`)
-          .run(active.id, req.body.payment_method, active.total_price, templateData, createdAt);
+        db.prepare(`INSERT INTO payments (order_id, payment_method, amount, status, template_data, approved_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+          .run(active.id, req.body.payment_method, active.total_price, autoApproved ? 'APPROVED' : 'WAITING_APPROVAL', templateData, autoApproved ? createdAt : null, createdAt);
       }
 
-      db.prepare(`UPDATE orders SET status = 'PAYMENT_WAITING', payment_status = 'WAITING_APPROVAL', updated_at = ? WHERE id = ?`)
-        .run(createdAt, active.id);
+      if (autoApproved) {
+        db.prepare(`UPDATE orders SET status = 'COMPLETED', payment_status = 'APPROVED', updated_at = ?, completed_at = ? WHERE id = ?`)
+          .run(createdAt, createdAt, active.id);
+      } else {
+        db.prepare(`UPDATE orders SET status = 'PAYMENT_WAITING', payment_status = 'WAITING_APPROVAL', updated_at = ? WHERE id = ?`)
+          .run(createdAt, active.id);
+      }
       updatedOrders.push(active.id);
     }
     setTableCurrentOrderToLatestActive(order.table_id);
@@ -290,7 +312,7 @@ router.post('/orders/:publicId/payment-request', validate(z.object({
     req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
   }
   req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('tables:changed', { table_id: order.table_id });
-  res.json({ order: currentFull || getFullOrder(order.id), affected_orders: updatedOrders.length });
+  res.json({ order: currentFull || getFullOrder(order.id), affected_orders: updatedOrders.length, auto_approved: autoApproved });
 });
 
 router.post('/restaurants/:slug/service-requests', validate(z.object({

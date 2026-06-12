@@ -246,6 +246,16 @@ export function setTableCurrentOrderToLatestActive(tableId) {
   return latest?.id || null;
 }
 
+
+export function nextOrderNumber(restaurantId) {
+  const row = db.prepare(`
+    SELECT COALESCE(MAX(CAST(REPLACE(order_number, '#', '') AS INTEGER)), 0) AS max_number
+    FROM orders
+    WHERE restaurant_id = ?
+  `).get(restaurantId);
+  return `#${String(Number(row?.max_number || 0) + 1).padStart(5, '0')}`;
+}
+
 export function getFullOrder(orderId) {
   const order = db.prepare(`
     SELECT o.*, r.name AS restaurant_name, r.slug AS restaurant_slug, t.table_number, t.table_token

@@ -1,5 +1,5 @@
-const CACHE_NAME = 'campuseats-local-v4';
-const APP_SHELL = ['/', '/manifest.json', '/icons/icon.svg'];
+const CACHE_NAME = 'campuseats-local-v5-4';
+const APP_SHELL = ['/', '/manifest.json', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));

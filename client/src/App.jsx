@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes, Link, useNavigate, useParams } from 'react-router-dom';
 import { LogOut, QrCode, ShieldCheck, Store, Smartphone } from 'lucide-react';
-import { clearSession, getStoredUser } from './api.js';
+import { api, clearSession, getStoredUser } from './api.js';
 import { SettingsControls, useSettings } from './i18n.jsx';
 import Login from './components/Login.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
@@ -41,6 +41,17 @@ function Header() {
 
 function Landing() {
   const { t } = useSettings();
+  const navigate = useNavigate();
+
+  async function openCustomerDemo() {
+    try {
+      const result = await api('/api/public/demo/table-link');
+      navigate(result.path || '/r/campus-eats/table/demo-table-1');
+    } catch {
+      alert(t('demoOpenError'));
+    }
+  }
+
   return (
     <main className="page landingPage">
       <Header />
@@ -51,7 +62,7 @@ function Landing() {
           <p className="heroText">{t('landingText')}</p>
           <div className="heroActions">
             <Link to="/login" className="primaryBtn">{t('panelLogin')}</Link>
-            <Link to="/r/campus-eats/table/demo" className="secondaryBtn">{t('customerDemo')}</Link>
+            <button type="button" className="secondaryBtn" onClick={openCustomerDemo}>{t('customerDemo')}</button>
           </div>
         </div>
         <div className="heroCards">
@@ -60,11 +71,21 @@ function Landing() {
           <div className="featureCard"><ShieldCheck /> <b>{t('admin')}</b><span>{t('adminHelp')}</span></div>
         </div>
       </section>
-      <section className="quickHelp card">
-        <h2>{t('quickStart')}</h2>
-        <p><b>Admin:</b> admin@local.test / admin123!</p>
-        <p><b>Manager:</b> manager@local.test / manager123!</p>
-        <p>{t('openRealQrFromManager')}</p>
+      <section className="landingInfoGrid">
+        <article className="quickHelp card">
+          <h2>{t('landingHowTitle')}</h2>
+          <p>{t('landingHowText')}</p>
+        </article>
+        <article className="quickHelp card">
+          <h2>{t('landingTechTitle')}</h2>
+          <p>{t('landingTechText')}</p>
+        </article>
+        <article className="quickHelp card">
+          <h2>{t('quickStart')}</h2>
+          <p><b>Admin:</b> admin@local.test / admin123!</p>
+          <p><b>Manager:</b> manager@local.test / manager123!</p>
+          <p>{t('openRealQrFromManager')}</p>
+        </article>
       </section>
     </main>
   );

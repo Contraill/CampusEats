@@ -179,7 +179,16 @@ router.get('/dashboard', (req, res) => {
     LIMIT 7
   `).all(rid).reverse();
 
-  res.json({ restaurant, totals, today, week, month, bestSellers, weeklyBestSellers, monthlyBestSellers, tableStats, dailyRevenue });
+  const recentCancelledOrders = db.prepare(`
+    SELECT o.*, t.table_number
+    FROM orders o
+    JOIN dining_tables t ON t.id = o.table_id
+    WHERE o.restaurant_id = ? AND o.status = 'CANCELLED'
+    ORDER BY o.updated_at DESC
+    LIMIT 6
+  `).all(rid).map((order) => ({ ...order, full: getFullOrder(order.id) }));
+
+  res.json({ restaurant, totals, today, week, month, bestSellers, weeklyBestSellers, monthlyBestSellers, tableStats, dailyRevenue, recentCancelledOrders });
 });
 
 router.get('/tables', (req, res) => {
@@ -483,19 +492,21 @@ router.get('/orders', (req, res) => {
   const rid = restaurantId(req);
   const todayPrefix = new Date().toISOString().slice(0, 10);
   const scope = String(req.query.scope || 'today');
-  const dateFilter = scope === 'history'
-    ? 'AND substr(o.created_at, 1, 10) < ?'
-    : 'AND substr(o.created_at, 1, 10) = ?';
+  const historyMode = scope === 'history';
+  const filter = historyMode
+    ? "AND o.status IN ('COMPLETED', 'CANCELLED')"
+    : "AND substr(o.created_at, 1, 10) = ? AND o.status NOT IN ('COMPLETED', 'CANCELLED')";
+  const params = historyMode ? [rid] : [rid, todayPrefix];
   const orders = db.prepare(`
     SELECT o.*, t.table_number,
       (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
     FROM orders o
     JOIN dining_tables t ON t.id = o.table_id
     WHERE o.restaurant_id = ?
-      ${dateFilter}
+      ${filter}
     ORDER BY o.created_at DESC
-    LIMIT 100
-  `).all(rid, todayPrefix).map((order) => ({ ...order, full: getFullOrder(order.id) }));
+    LIMIT 150
+  `).all(...params).map((order) => ({ ...order, full: getFullOrder(order.id) }));
   res.json({ orders });
 });
 
@@ -564,31 +575,50 @@ router.post('/orders/bulk/payment/approve', validate(z.object({
   const table = assertOwnTable(req, req.body.table_id);
   if (!table) return res.status(404).json({ message: 'Table not found.' });
 
-  const targets = db.prepare(`
+  const activeOrders = db.prepare(`
     SELECT o.*
     FROM orders o
-    JOIN payments p ON p.order_id = o.id AND p.status = 'WAITING_APPROVAL'
-    WHERE o.restaurant_id = ? AND o.table_id = ? AND o.payment_status = 'WAITING_APPROVAL' AND o.status = 'PAYMENT_WAITING'
+    WHERE o.restaurant_id = ? AND o.table_id = ? AND o.status NOT IN ('COMPLETED', 'CANCELLED')
+    ORDER BY o.id ASC
   `).all(rid, table.id);
 
-  if (!targets.length) return next(localizedError(req, 'There are no waiting payment requests.', 409));
+  const blocked = activeOrders.find((order) => !((order.payment_status === 'WAITING_APPROVAL' && order.status === 'PAYMENT_WAITING') || (order.payment_status === 'NOT_REQUESTED' && order.status === 'SERVED')));
+  if (!activeOrders.length || blocked) return next(localizedError(req, 'All active orders must be served before payment can be approved.', 409));
+
+  const targets = activeOrders;
+
+  if (!targets.length) return next(localizedError(req, 'There are no served orders or waiting payment requests for this table.', 409));
 
   const approvedAt = now();
-  const tableIds = new Set(targets.map((order) => order.table_id));
   db.transaction(() => {
     for (const order of targets) {
-      db.prepare(`
-        UPDATE payments
-        SET status = 'APPROVED', approved_by = ?, approved_at = ?, rejection_reason = NULL
-        WHERE order_id = ? AND status = 'WAITING_APPROVAL'
-      `).run(req.user.id, approvedAt, order.id);
+      const fullBefore = getFullOrder(order.id);
+      const templateData = JSON.stringify({
+        title: 'Payment Confirmation', restaurant: fullBefore.restaurant_name, table: fullBefore.table_number,
+        orderNumber: fullBefore.order_number, totalAmount: fullBefore.total_price, method: 'CASH', status: 'Approved at Cashier'
+      });
+
+      const existingPayment = db.prepare('SELECT id FROM payments WHERE order_id = ?').get(order.id);
+      if (existingPayment) {
+        db.prepare(`
+          UPDATE payments
+          SET status = 'APPROVED', approved_by = ?, approved_at = ?, rejection_reason = NULL
+          WHERE order_id = ?
+        `).run(req.user.id, approvedAt, order.id);
+      } else {
+        db.prepare(`
+          INSERT INTO payments (order_id, payment_method, amount, status, template_data, approved_by, approved_at, created_at)
+          VALUES (?, 'CASH', ?, 'APPROVED', ?, ?, ?, ?)
+        `).run(order.id, order.total_price, templateData, req.user.id, approvedAt, approvedAt);
+      }
+
       db.prepare(`
         UPDATE orders
         SET status = 'COMPLETED', payment_status = 'APPROVED', updated_at = ?, completed_at = ?
         WHERE id = ?
       `).run(approvedAt, approvedAt, order.id);
     }
-    for (const tableId of tableIds) setTableCurrentOrderToLatestActive(tableId);
+    setTableCurrentOrderToLatestActive(table.id);
   })();
 
   for (const order of targets) {
@@ -596,8 +626,19 @@ router.post('/orders/bulk/payment/approve', validate(z.object({
     emitRestaurant(req, 'orders:changed', { order: full });
     req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
   }
-  for (const tableId of tableIds) emitRestaurant(req, 'tables:changed', { table_id: tableId });
+  emitRestaurant(req, 'tables:changed', { table_id: table.id });
   res.json({ ok: true, approved_count: targets.length });
+});
+
+router.delete('/orders/:id', (req, res, next) => {
+  const order = assertOwnOrder(req, Number(req.params.id));
+  if (!order) return res.status(404).json({ message: 'Order not found.' });
+  if (order.status !== 'CANCELLED') return next(localizedError(req, 'Only cancelled orders can be deleted.', 409));
+  db.prepare('DELETE FROM orders WHERE id = ? AND restaurant_id = ?').run(order.id, restaurantId(req));
+  setTableCurrentOrderToLatestActive(order.table_id);
+  emitRestaurant(req, 'orders:changed', { order_id: order.id, deleted: true });
+  emitRestaurant(req, 'tables:changed', { table_id: order.table_id });
+  res.json({ ok: true });
 });
 
 router.get('/orders/:id', (req, res) => {
@@ -613,7 +654,7 @@ router.patch('/orders/:id/status', validate(z.object({
   if (!order) return res.status(404).json({ message: 'Order not found.' });
 
   if (req.body.status === 'PAYMENT_WAITING') {
-    return next(localizedError(req, 'Payment waiting can only be started by the customer after payment.', 409));
+    return next(localizedError(req, 'Payment waiting can only be started after a customer payment request.', 409));
   }
 
   if (req.body.status === 'COMPLETED' && order.payment_status !== 'APPROVED') {
@@ -650,7 +691,7 @@ router.post('/orders/:id/payment/approve', (req, res, next) => {
     return next(localizedError(req, 'This order does not have a waiting payment request.', 409));
   }
   if (!['CASH', 'CARD', 'TRANSFER'].includes(payment.payment_method)) {
-    return next(localizedError(req, 'Payment must be requested by the customer before approval.', 409));
+    return next(localizedError(req, 'Payment must be requested before approval.', 409));
   }
 
   const approvedAt = now();

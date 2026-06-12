@@ -38,6 +38,8 @@ button:disabled { cursor: not-allowed; opacity: .7; }
 .featureCard svg { grid-row: span 2; color: var(--teal); }
 .featureCard span { color: var(--muted); }
 .quickHelp { margin: 0 clamp(18px, 7vw, 110px) 60px; }
+.landingInfoGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 0 clamp(18px, 7vw, 110px) 60px; }
+.landingInfoGrid .quickHelp { margin: 0; }
 
 .primaryBtn, .secondaryBtn, .ghostBtn, .dangerBtn, .approveBtn, .smallBtn { border: 0; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 18px; border-radius: 999px; font-weight: 800; }
 .primaryBtn { color: white; background: linear-gradient(135deg, var(--teal), var(--blue)); box-shadow: 0 12px 24px rgba(0, 116, 255, .23); }
@@ -204,7 +206,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .paymentMethods button { border: 0; min-height: 40px; border-radius: 14px; font-weight: 800; background: linear-gradient(135deg, var(--teal), var(--blue)); color: white; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 
 @media (max-width: 980px) {
-  .hero, .grid.two, .grid.uneven { grid-template-columns: 1fr; }
+  .hero, .grid.two, .grid.uneven, .landingInfoGrid { grid-template-columns: 1fr; }
   .statsGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .appShell { grid-template-columns: 1fr; }
   .sidebar { position: relative; min-height: auto; }
@@ -395,7 +397,8 @@ html[data-theme='dark'] .panelMain {
 }
 html[data-theme='dark'] .topbar,
 html[data-theme='dark'] .hero,
-html[data-theme='dark'] .quickHelp {
+html[data-theme='dark'] .quickHelp,
+html[data-theme='dark'] .landingInfoGrid .card {
   color: var(--text);
 }
 html[data-theme='dark'] .featureCard,

@@ -30,16 +30,20 @@ const messageMap = {
     'Only image files are allowed.': 'Sadece resim dosyası yüklenebilir.',
     'Image is too large. Maximum 5 MB.': 'Resim çok büyük. En fazla 5 MB olabilir.',
     'Uploaded file is not a valid image.': 'Yüklenen dosya geçerli bir resim değil.',
-    'Payment waiting can only be started by the customer after payment.': 'Ödeme bekleme durumu sadece müşteri ödeme isteği oluşturduktan sonra başlatılabilir.',
+    'Payment waiting can only be started after a customer payment request.': 'Ödeme bekleme durumu yalnızca müşteri ödeme isteği oluşturduktan sonra başlatılabilir.',
     'An order can be completed only after payment approval.': 'Sipariş sadece ödeme onaylandıktan sonra tamamlanabilir.',
-    'Payment must be requested by the customer before approval.': 'Ödeme onayından önce müşteri ödeme isteği oluşturmalı.',
+    'Payment must be requested before approval.': 'Ödeme onaylanmadan önce ödeme isteği oluşturulmalı.',
     'This order does not have a waiting payment request.': 'Bu sipariş için onay bekleyen ödeme isteği yok.',
     'This order is already closed.': 'Bu sipariş zaten kapalı.',
     'Payment process has started for this table. Orders cannot be cancelled now.': 'Bu masa için ödeme süreci başladı. Artık sipariş iptal edilemez.',
-    'Prepared orders cannot be cancelled by the customer.': 'Hazır olan sipariş müşteri tarafından iptal edilemez.',
+    'Orders cannot be cancelled after preparation starts.': 'Hazırlanmaya başlayan sipariş iptal edilemez.',
+    'Orders can only be cancelled before preparation starts.': 'Sipariş sadece hazırlanmaya başlamadan önce iptal edilebilir.',
     'Order cancelled.': 'Sipariş iptal edildi.',
     'A category with this name already exists.': 'Bu isimde bir kategori zaten var.',
-    'A category with this sort order already exists.': 'Bu sıralama numarasına sahip bir kategori zaten var.'
+    'A category with this sort order already exists.': 'Bu sıralama numarasına sahip bir kategori zaten var.',
+    'There are no served orders or waiting payment requests for this table.': 'Bu masa için servis edilmiş sipariş veya onay bekleyen ödeme yok.',
+    'Only cancelled orders can be deleted.': 'Sadece iptal edilen siparişler silinebilir.',
+    'All active orders must be served before payment can be approved.': 'Ödeme onaylanmadan önce masadaki tüm aktif siparişler servis edilmiş olmalı.'
   },
   en: {
     'Invalid email address.': 'Invalid email address.',
@@ -50,16 +54,20 @@ const messageMap = {
     'Only image files are allowed.': 'Only image files are allowed.',
     'Image is too large. Maximum 5 MB.': 'Image is too large. Maximum 5 MB.',
     'Uploaded file is not a valid image.': 'Uploaded file is not a valid image.',
-    'Payment waiting can only be started by the customer after payment.': 'Payment waiting can only be started by the customer after payment.',
+    'Payment waiting can only be started after a customer payment request.': 'Payment waiting can only be started after a customer payment request.',
     'An order can be completed only after payment approval.': 'An order can be completed only after payment approval.',
-    'Payment must be requested by the customer before approval.': 'Payment must be requested by the customer before approval.',
+    'Payment must be requested before approval.': 'Payment must be requested before approval.',
     'This order does not have a waiting payment request.': 'This order does not have a waiting payment request.',
     'This order is already closed.': 'This order is already closed.',
     'Payment process has started for this table. Orders cannot be cancelled now.': 'Payment process has started for this table. Orders cannot be cancelled now.',
-    'Prepared orders cannot be cancelled by the customer.': 'Prepared orders cannot be cancelled by the customer.',
+    'Orders cannot be cancelled after preparation starts.': 'Orders cannot be cancelled after preparation starts.',
+    'Orders can only be cancelled before preparation starts.': 'Orders can only be cancelled before preparation starts.',
     'Order cancelled.': 'Order cancelled.',
     'A category with this name already exists.': 'A category with this name already exists.',
-    'A category with this sort order already exists.': 'A category with this sort order already exists.'
+    'A category with this sort order already exists.': 'A category with this sort order already exists.',
+    'There are no served orders or waiting payment requests for this table.': 'There are no served orders or waiting payment requests for this table.',
+    'Only cancelled orders can be deleted.': 'Only cancelled orders can be deleted.',
+    'All active orders must be served before payment can be approved.': 'All active orders must be served before payment can be approved.'
   }
 };
 

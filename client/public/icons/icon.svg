@@ -1,11 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24" fill="none">
   <defs>
-    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop stop-color="#08c7b8"/>
-      <stop offset="1" stop-color="#006dff"/>
+    <linearGradient id="bg" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#08B8E8"/>
+      <stop offset="1" stop-color="#0877D9"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="120" fill="url(#g)"/>
-  <path fill="white" d="M164 138h52v52h-52zm132 0h52v52h-52zM164 322h52v52h-52zm132 0h52v52h-52zM150 236h212v40H150zM236 150h40v86h-40zm0 126h40v86h-40z"/>
-  <path fill="white" d="M116 86h90v32h-58v58h-32zm190 0h90v90h-32v-58h-58zM116 336h32v58h58v32h-90zm248 0h32v90h-90v-32h58z" opacity=".75"/>
+  <rect width="24" height="24" x="0" y="0" rx="6" fill="url(#bg)"/>
+  <g stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="4.6" height="4.6" x="3.2" y="3.2" rx="1"></rect>
+    <rect width="4.6" height="4.6" x="16.2" y="3.2" rx="1"></rect>
+    <rect width="4.6" height="4.6" x="3.2" y="16.2" rx="1"></rect>
+    <path d="M21 16h-3a2 2 0 0 0-2 2v3"></path>
+    <path d="M21 21v.01"></path>
+    <path d="M12 7v3a2 2 0 0 1-2 2H7"></path>
+    <path d="M3 12h.01"></path>
+    <path d="M12 3h.01"></path>
+    <path d="M12 16v.01"></path>
+    <path d="M16 12h1"></path>
+    <path d="M21 12v.01"></path>
+    <path d="M12 21v-1"></path>
+  </g>
 </svg>

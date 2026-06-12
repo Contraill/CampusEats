@@ -57,7 +57,7 @@ export default function OrderStatus() {
   function canCancelOrder(target) {
     if (!target) return false;
     if (['COMPLETED', 'CANCELLED'].includes(target.status)) return false;
-    if (!['PENDING', 'PREPARING'].includes(target.status)) return false;
+    if (target.status !== 'PENDING') return false;
     if (['WAITING_APPROVAL', 'APPROVED'].includes(target.payment_status)) return false;
     return !activeTableOrders.some((active) => active.payment_status === 'WAITING_APPROVAL' || active.status === 'PAYMENT_WAITING');
   }
@@ -100,14 +100,34 @@ export default function OrderStatus() {
   const canAddMore = !completed && !cancelled && !billingStarted && order.payment_status === 'NOT_REQUESTED';
   const canRequestPayment = !completed && !cancelled && order.payment_status === 'NOT_REQUESTED' && allActiveServed;
   const qrHome = `/r/${order.restaurant_slug}/table/${order.table_token}`;
+  const titleKey = (() => {
+    if (cancelled) return 'orderCancelledTitle';
+    if (completed) return 'orderCompleted';
+    if (order.status === 'PREPARING') return 'orderPreparingTitle';
+    if (order.status === 'READY') return 'orderReadyTitle';
+    if (order.status === 'SERVED') return 'orderServedTitle';
+    if (order.status === 'PAYMENT_WAITING') return 'paymentWaitingTitle';
+    if (order.status === 'PAYMENT_REJECTED') return 'paymentRejectedTitle';
+    return 'orderConfirmed';
+  })();
+  const textKey = (() => {
+    if (cancelled) return 'orderCancelledText';
+    if (completed) return 'paymentApprovedDone';
+    if (order.status === 'PREPARING') return 'orderPreparingText';
+    if (order.status === 'READY') return 'orderReadyText';
+    if (order.status === 'SERVED') return 'orderServedText';
+    if (order.status === 'PAYMENT_WAITING') return 'paymentWaiting';
+    if (order.status === 'PAYMENT_REJECTED') return 'paymentRejected';
+    return 'orderSent';
+  })();
 
   return (
     <main className="customerShell centeredCustomer">
       <section className="phoneFrame confirmationScreen">
         <div className="customerPrefsFloating"><SettingsControls compact floating /></div>
         <div className={`successIcon ${completed ? '' : 'waiting'}`}>{completed ? <CheckCircle2 size={70} /> : <Clock size={70} />}</div>
-        <h1>{completed ? t('orderCompleted') : t('orderConfirmed')}</h1>
-        <p>{completed ? t('paymentApprovedDone') : t('orderSent')}</p>
+        <h1>{t(titleKey)}</h1>
+        <p>{t(textKey)}</p>
 
         <div className="statusCard">
           <p><span>{t('status')}</span><b>{niceStatus(order.status)}</b></p>
@@ -150,7 +170,7 @@ export default function OrderStatus() {
         {order.payment_status === 'REJECTED' && <div className="errorBox">{t('paymentRejected')}</div>}
         {error && <div className="errorBox">{error}</div>}
 
-        <Link to={qrHome} className="secondaryBtn full"><Home size={15} /> {t('backToHome')}</Link>
+        {(completed || cancelled) && <Link to={qrHome} className="secondaryBtn full"><Home size={15} /> {t('backToHome')}</Link>}
       </section>
     </main>
   );
