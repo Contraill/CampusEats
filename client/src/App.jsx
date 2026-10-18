@@ -84,6 +84,7 @@ function Landing() {
           <h2>{t('quickStart')}</h2>
           <p><b>Admin:</b> admin@local.test / admin123!</p>
           <p><b>Manager:</b> manager@local.test / manager123!</p>
+          <p className="small muted">{t('demoLocalOnly')}</p>
           <p>{t('openRealQrFromManager')}</p>
         </article>
       </section>
