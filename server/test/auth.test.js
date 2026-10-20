@@ -1,52 +1,23 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import jwt from 'jsonwebtoken';
+import { db, now, startApp } from './helpers.js';
+import { resolveJwtSecret } from '../src/auth.js';
 
-process.env.DB_PATH = ':memory:';
-process.env.JWT_SECRET = 'test-secret-0123456789abcdef0123456789abcdef';
-delete process.env.NODE_ENV;
-delete process.env.PUBLIC_APP_URL;
-
-const { default: express } = await import('express');
-const { default: jwt } = await import('jsonwebtoken');
-const { db, initDb, now } = await import('../src/database.js');
-const { resolveJwtSecret } = await import('../src/auth.js');
-const { default: authRoutes } = await import('../src/routes/authRoutes.js');
-const { default: adminRoutes } = await import('../src/routes/adminRoutes.js');
-const { default: managerRoutes } = await import('../src/routes/managerRoutes.js');
-
-let server;
-let base;
+let app;
+let call;
 let adminToken;
 let managerToken;
 let manager;
 
-async function call(path, { token, method = 'GET', body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(base + path, { method, headers, body: body && JSON.stringify(body) });
-  return { status: res.status, body: await res.json().catch(() => null) };
-}
-
-async function login(email, password) {
-  const res = await call('/api/auth/login', { method: 'POST', body: { email, password } });
-  assert.equal(res.status, 200);
-  return res.body;
-}
-
 before(async () => {
-  initDb();
-  const app = express();
-  app.use(express.json());
-  app.use('/api/auth', authRoutes);
-  app.use('/api/admin', adminRoutes);
-  app.use('/api/manager', managerRoutes);
-  await new Promise((resolve) => { server = app.listen(0, '127.0.0.1', resolve); });
-  base = `http://127.0.0.1:${server.address().port}`;
-  adminToken = (await login('admin@local.test', 'admin123!')).token;
-  ({ token: managerToken, user: manager } = await login('manager@local.test', 'manager123!'));
+  app = await startApp();
+  ({ call } = app);
+  adminToken = (await app.login('admin@local.test', 'admin123!')).token;
+  ({ token: managerToken, user: manager } = await app.login('manager@local.test', 'manager123!'));
 });
 
-after(() => server.close());
+after(() => app.close());
 
 test('JWT secret: local demo without a secret falls back to a generated one', () => {
   assert.equal(resolveJwtSecret({}), null);

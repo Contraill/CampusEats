@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { db, getActiveOrdersForTable, getFullOrder, now, randomToken, setTableCurrentOrderToLatestActive, uploadDir } from '../database.js';
+import { emitOrderUpdate } from '../socket.js';
 import { authRequired, requireManagerRestaurant, requireRole } from '../auth.js';
 import { validate, localizedError, translateMessage } from '../validation.js';
 
@@ -277,7 +278,7 @@ router.post('/tables/:id/clear', (req, res) => {
     const full = getFullOrder(active.id);
     if (full) {
       emitRestaurant(req, 'orders:changed', { order: full });
-      req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+      emitOrderUpdate(req, full);
     }
   }
   res.json({ ok: true, cancelled_order_ids: activeOrders.map((order) => order.id) });
@@ -562,7 +563,7 @@ router.post('/orders/bulk/status', validate(z.object({
   for (const target of targets) {
     const full = getFullOrder(target.id);
     emitRestaurant(req, 'orders:changed', { order: full });
-    req.app.get('io')?.to(`order:${target.public_id}`).emit('order:updated', full);
+    emitOrderUpdate(req, full);
   }
   emitRestaurant(req, 'tables:changed', { table_id: table.id });
   res.json({ ok: true, updated_count: targets.length, table_id: table.id });
@@ -624,7 +625,7 @@ router.post('/orders/bulk/payment/approve', validate(z.object({
   for (const order of targets) {
     const full = getFullOrder(order.id);
     emitRestaurant(req, 'orders:changed', { order: full });
-    req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+    emitOrderUpdate(req, full);
   }
   emitRestaurant(req, 'tables:changed', { table_id: table.id });
   res.json({ ok: true, approved_count: targets.length });
@@ -679,7 +680,7 @@ router.patch('/orders/:id/status', validate(z.object({
   const full = getFullOrder(order.id);
   emitRestaurant(req, 'orders:changed', { order: full });
   if (['COMPLETED', 'CANCELLED'].includes(req.body.status)) emitRestaurant(req, 'tables:changed', { table_id: order.table_id });
-  req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+  emitOrderUpdate(req, full);
   res.json({ order: full });
 });
 
@@ -714,7 +715,7 @@ router.post('/orders/:id/payment/approve', (req, res, next) => {
   const full = getFullOrder(order.id);
   emitRestaurant(req, 'orders:changed', { order: full });
   emitRestaurant(req, 'tables:changed', { table_id: order.table_id });
-  req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+  emitOrderUpdate(req, full);
   res.json({ order: full, table_cleared: getActiveOrdersForTable(order.table_id).length === 0 });
 });
 
@@ -738,7 +739,7 @@ router.post('/orders/:id/payment/reject', validate(z.object({
 
   const full = getFullOrder(order.id);
   emitRestaurant(req, 'orders:changed', { order: full });
-  req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+  emitOrderUpdate(req, full);
   res.json({ order: full });
 });
 

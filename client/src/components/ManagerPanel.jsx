@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
 import { BarChart3, Bell, CheckCircle2, ClipboardList, Clock3, ImagePlus, Pencil, Plus, QrCode, RefreshCcw, Trash2, UtensilsCrossed, XCircle } from 'lucide-react';
-import { api, getStoredUser, money, niceStatus, updateStoredUser } from '../api.js';
+import { api, getStoredUser, getToken, money, niceStatus, updateStoredUser } from '../api.js';
 import { useSettings } from '../i18n.jsx';
 import AppShell from './AppShell.jsx';
 
@@ -96,8 +96,9 @@ export default function ManagerPanel() {
   useEffect(() => {
     const restaurantRoomId = restaurant?.id || user?.restaurant_id;
     if (!restaurantRoomId) return undefined;
-    const socket = io(API_BASE, { path: '/socket.io' });
-    socket.emit('joinRestaurant', restaurantRoomId);
+    const socket = io(API_BASE, { path: '/socket.io', auth: { token: getToken() } });
+    // Rooms are lost on reconnect, so join on every connect.
+    socket.on('connect', () => socket.emit('joinRestaurant', restaurantRoomId));
     socket.on('orders:changed', () => loadAll().catch(() => undefined));
     socket.on('tables:changed', () => loadAll().catch(() => undefined));
     socket.on('menu:changed', () => loadAll().catch(() => undefined));

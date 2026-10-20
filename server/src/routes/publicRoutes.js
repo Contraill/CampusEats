@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
-import { db, getActiveOrdersForTable, getFullOrder, nextOrderNumber, now, randomToken, setTableCurrentOrderToLatestActive, tableBillingStarted } from '../database.js';
+import { customerOrderView, db, getActiveOrdersForTable, getFullOrder, nextOrderNumber, now, randomToken, setTableCurrentOrderToLatestActive, tableBillingStarted } from '../database.js';
+import { emitOrderUpdate } from '../socket.js';
 import { validate, localizedError } from '../validation.js';
 
 const router = express.Router();
@@ -204,7 +205,7 @@ router.post('/orders', validate(z.object({
 router.get('/orders/:publicId', (req, res) => {
   const order = db.prepare('SELECT id FROM orders WHERE public_id = ?').get(req.params.publicId);
   if (!order) return res.status(404).json({ message: 'Order not found.' });
-  res.json({ order: getFullOrder(order.id) });
+  res.json({ order: customerOrderView(getFullOrder(order.id)) });
 });
 
 
@@ -242,13 +243,13 @@ router.post('/orders/:publicId/cancel', (req, res, next) => {
   const cancelledOrder = getFullOrder(order.id);
   const activeOrders = getActiveOrdersForTable(order.table_id);
   req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('orders:changed', { order: cancelledOrder });
-  req.app.get('io')?.to(`order:${cancelledOrder.public_id}`).emit('order:updated', cancelledOrder);
+  emitOrderUpdate(req, cancelledOrder);
   for (const active of activeOrders) {
     const full = getFullOrder(active.id);
-    req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+    emitOrderUpdate(req, full);
   }
   req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('tables:changed', { table_id: order.table_id });
-  res.json({ order: cancelledOrder, active_orders: activeOrders, table_cleared: activeOrders.length === 0 });
+  res.json({ order: customerOrderView(cancelledOrder), active_orders: activeOrders, table_cleared: activeOrders.length === 0 });
 });
 
 router.post('/orders/:publicId/payment-request', validate(z.object({
@@ -309,10 +310,10 @@ router.post('/orders/:publicId/payment-request', validate(z.object({
     const full = getFullOrder(orderId);
     if (orderId === order.id) currentFull = full;
     req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('orders:changed', { order: full });
-    req.app.get('io')?.to(`order:${full.public_id}`).emit('order:updated', full);
+    emitOrderUpdate(req, full);
   }
   req.app.get('io')?.to(`restaurant:${order.restaurant_id}`).emit('tables:changed', { table_id: order.table_id });
-  res.json({ order: currentFull || getFullOrder(order.id), affected_orders: updatedOrders.length, auto_approved: autoApproved });
+  res.json({ order: customerOrderView(currentFull || getFullOrder(order.id)), affected_orders: updatedOrders.length, auto_approved: autoApproved });
 });
 
 router.post('/restaurants/:slug/service-requests', validate(z.object({

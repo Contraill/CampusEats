@@ -49,18 +49,23 @@ export function verifyPassword(password, hash) {
   return bcrypt.compareSync(password, hash);
 }
 
+// Throws on a bad or expired token; returns null when the user no longer exists.
+export function userFromToken(token) {
+  const payload = jwt.verify(token, jwtSecret);
+  return db.prepare(`
+    SELECT id, name, email, role, restaurant_id, created_at
+    FROM users
+    WHERE id = ?
+  `).get(payload.id) || null;
+}
+
 export function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ message: 'Authentication required.' });
 
   try {
-    const payload = jwt.verify(token, jwtSecret);
-    const user = db.prepare(`
-      SELECT id, name, email, role, restaurant_id, created_at
-      FROM users
-      WHERE id = ?
-    `).get(payload.id);
+    const user = userFromToken(token);
     if (!user) return res.status(401).json({ message: 'Invalid user.' });
     req.user = user;
     return next();

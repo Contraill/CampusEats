@@ -38,7 +38,7 @@ export default function OrderStatus() {
 
   useEffect(() => {
     const socket = io(API_BASE, { path: '/socket.io' });
-    socket.emit('joinOrder', publicId);
+    socket.on('connect', () => socket.emit('joinOrder', publicId));
     socket.on('order:updated', setOrder);
     return () => socket.disconnect();
   }, [publicId]);
@@ -163,7 +163,7 @@ export default function OrderStatus() {
         {canAddMore && <Link className="primaryBtn full" to={`/r/${order.restaurant_slug}/table/${order.table_token}?mode=add`}><Plus size={15} /> {t('addMoreItems')}</Link>}
 
         {canRequestPayment ? (
-          <div className="paymentRequestBox"><p>{t('requestPayment')}</p><div className="paymentMethods">{['CASH', 'CARD', 'TRANSFER'].map((method) => <button key={method} disabled={loadingPayment} onClick={() => requestPayment(method)}><CreditCard size={15} /> {niceStatus(method)}</button>)}</div></div>
+          <div className="paymentRequestBox"><p>{t('requestPayment')}</p><div className="paymentMethods">{['CASH', 'CARD', 'TRANSFER'].map((method) => <button key={method} disabled={loadingPayment} onClick={() => requestPayment(method)}><CreditCard size={15} /> {niceStatus(method)}</button>)}</div><small className="muted">{t('paymentSimulationNote')}</small></div>
         ) : (order.payment_status === 'NOT_REQUESTED' && !completed && !cancelled && <div className="noticeBox">{billingStarted ? t('paymentWaiting') : allActiveServed ? t('paymentReadyAllOrders') : t('paymentAllOrdersServed')}</div>)}
 
         {order.payment_status === 'WAITING_APPROVAL' && <div className="noticeBox">{t('paymentWaiting')}</div>}

@@ -13,6 +13,7 @@ import authRoutes from './routes/authRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import managerRoutes from './routes/managerRoutes.js';
 import publicRoutes from './routes/publicRoutes.js';
+import { setupSocket } from './socket.js';
 
 initDb();
 
@@ -38,15 +39,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads')));
 
-io.on('connection', (socket) => {
-  socket.on('joinRestaurant', (restaurantId) => {
-    if (restaurantId) socket.join(`restaurant:${restaurantId}`);
-  });
-
-  socket.on('joinOrder', (publicId) => {
-    if (publicId) socket.join(`order:${publicId}`);
-  });
-});
+setupSocket(io);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, mode: 'local', firebase: false });

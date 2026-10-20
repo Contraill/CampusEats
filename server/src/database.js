@@ -281,6 +281,12 @@ export function getFullOrder(orderId) {
   return { ...order, items, payment, table_orders: tableOrders };
 }
 
+// What a holder of the order's public_id gets: only the fields the customer order screen uses.
+export function customerOrderView(order) {
+  const { public_id, order_number, status, payment_status, total_price, table_number, table_token, restaurant_slug, items, table_orders } = order;
+  return { public_id, order_number, status, payment_status, total_price, table_number, table_token, restaurant_slug, items, table_orders };
+}
+
 export function initDb() {
   createSchema();
   seedIfEmpty();
