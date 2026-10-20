@@ -75,9 +75,20 @@ npm start
 
 Optional: copy `server/.env.example` to `server/.env` to set the port, origins and JWT secret. To reset the database back to the demo data, run `npm --prefix server run reset-db`.
 
+Run the authorization tests with `npm test`.
+
+### JWT secret
+
+- **Local demo:** no setup needed. If `JWT_SECRET` is empty, a random secret is generated once and kept in `server/data/jwt-secret` (git-ignored).
+- **Production or public URL:** when `NODE_ENV=production`, or `PUBLIC_APP_URL` is anything other than `localhost` or a private LAN address (for example a Cloudflare Tunnel or ngrok URL), the server **refuses to start** unless `JWT_SECRET` is a random value of at least 32 characters:
+
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+
 ## Demo accounts
 
-> ⚠️ **Local demo only.** These accounts are seeded into the local SQLite database for testing. Change the passwords (and set `JWT_SECRET`) before exposing the app anywhere, including a temporary tunnel.
+> ⚠️ **Local demo only.** These accounts are seeded into the local SQLite database for testing. Change the passwords before exposing the app anywhere, including a temporary tunnel, and set a [JWT secret](#jwt-secret).
 
 | Role | Email | Password |
 |---|---|---|
@@ -99,9 +110,10 @@ Password policy: at least 6 characters, including at least one number and one sp
 ## Project structure
 
 ```text
-client/   React + Vite frontend (customer UI, manager and admin panels, PWA)
-server/   Express API, Socket.IO, SQLite database, image uploads
-docs/     README screenshots
+client/       React + Vite frontend (customer UI, manager and admin panels, PWA)
+server/       Express API, Socket.IO, SQLite database, image uploads
+server/test/  Authorization tests (node:test, in-memory SQLite)
+docs/         README screenshots
 ```
 
 ## Notes

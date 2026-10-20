@@ -7,11 +7,11 @@ import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dataDir = path.join(__dirname, '..', 'data');
+export const dataDir = path.join(__dirname, '..', 'data');
 export const uploadDir = path.join(__dirname, '..', 'public', 'uploads', 'menu');
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(uploadDir, { recursive: true });
-const dbPath = path.join(dataDir, 'campuseats.sqlite');
+const dbPath = process.env.DB_PATH || path.join(dataDir, 'campuseats.sqlite');
 
 export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');

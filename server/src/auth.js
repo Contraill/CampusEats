@@ -1,8 +1,35 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { db } from './database.js';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { db, dataDir } from './database.js';
 
-const jwtSecret = process.env.JWT_SECRET || 'local-development-secret';
+// Values that have shipped in this repo; anyone can sign tokens with them.
+const KNOWN_SECRETS = new Set(['local-development-secret', 'change-this-local-secret']);
+const PRIVATE_HOST = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/;
+
+export function isPublicDeployment(env) {
+  return env.NODE_ENV === 'production' || !PRIVATE_HOST.test(new URL(env.PUBLIC_APP_URL || 'http://localhost').hostname);
+}
+
+// Returns the configured secret, or null when a local demo may fall back to a generated one.
+export function resolveJwtSecret(env) {
+  const secret = env.JWT_SECRET && !KNOWN_SECRETS.has(env.JWT_SECRET) ? env.JWT_SECRET : null;
+  if (isPublicDeployment(env) && !(secret?.length >= 32)) {
+    throw new Error('JWT_SECRET must be a random value of at least 32 characters when NODE_ENV=production or PUBLIC_APP_URL is a public address. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  }
+  return secret;
+}
+
+// Random per-install secret for local demos, stored next to the git-ignored SQLite file.
+function localSecret() {
+  const file = path.join(dataDir, 'jwt-secret');
+  if (!fs.existsSync(file)) fs.writeFileSync(file, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+  return fs.readFileSync(file, 'utf8').trim();
+}
+
+const jwtSecret = resolveJwtSecret(process.env) ?? localSecret();
 
 export function signToken(user) {
   return jwt.sign(
